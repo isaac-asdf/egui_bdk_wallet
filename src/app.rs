@@ -1,4 +1,4 @@
-use bdk::{database::MemoryDatabase, Wallet};
+use bdk_wallet::Wallet;
 use sidepanel::sidepanel;
 
 use crate::bdk_utils;
@@ -11,7 +11,7 @@ pub struct WalletApp {
     #[serde(skip)] // This how you opt-out of serialization of a field
     page: Page,
     #[serde(skip)]
-    wallet: Wallet<MemoryDatabase>,
+    wallet: Wallet,
     wallet_words: String,
     electrum_url: String,
     db_url: String,

@@ -22,8 +22,10 @@ log = "0.4"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
-
-bdk = { version = "0.29.0", features = ["all-keys"] }
+bdk_wallet = { version = "1.0.0-alpha.13", features = ["bip39", "keys-bip39"] }
+bdk_file_store = "0.13.0"
+bdk_sqlite = "0.2.0"
+bdk_electrum = "0.15.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
