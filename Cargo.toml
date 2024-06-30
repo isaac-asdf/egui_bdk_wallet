@@ -1,7 +1,7 @@
 [package]
-name = "eframe_template"
+name = "Seashell"
 version = "0.1.0"
-authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
+authors = ["isaac-asdf"]
 edition = "2021"
 include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
 rust-version = "1.76"
@@ -22,6 +22,8 @@ log = "0.4"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
+
+bdk = { version = "0.29.0", features = ["all-keys"] }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

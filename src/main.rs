@@ -12,15 +12,15 @@ fn main() -> eframe::Result<()> {
             .with_min_inner_size([300.0, 220.0])
             .with_icon(
                 // NOTE: Adding an icon is optional
-                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
+                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/crab.png")[..])
                     .expect("Failed to load icon"),
             ),
         ..Default::default()
     };
     eframe::run_native(
-        "eframe template",
+        "BTC Wallet",
         native_options,
-        Box::new(|cc| Box::new(eframe_template::TemplateApp::new(cc))),
+        Box::new(|cc| Box::new(Seashell::WalletApp::new(cc))),
     )
 }
 
@@ -37,7 +37,7 @@ fn main() {
             .start(
                 "the_canvas_id", // hardcode it
                 web_options,
-                Box::new(|cc| Box::new(eframe_template::TemplateApp::new(cc))),
+                Box::new(|cc| Box::new(eframe_template::WalletApp::new(cc))),
             )
             .await;
         let loading_text = web_sys::window()

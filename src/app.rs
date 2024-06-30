@@ -1,25 +1,56 @@
+use bdk::{database::MemoryDatabase, Wallet};
+use sidepanel::sidepanel;
+
+use crate::bdk_utils;
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
-    // Example stuff:
-    label: String,
-
+pub struct WalletApp {
+    /// Currently viewed page
     #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
+    page: Page,
+    #[serde(skip)]
+    wallet: Wallet<MemoryDatabase>,
+    wallet_words: String,
+    electrum_url: String,
+    db_url: String,
+    debug: String,
 }
 
-impl Default for TemplateApp {
+// #[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize)]
+// struct Wallet {
+//     xpub:
+// }
+
+#[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize)]
+enum Page {
+    Home,
+    Transaction,
+    Settings,
+}
+
+mod home;
+mod settings;
+mod sidepanel;
+mod transactions;
+
+impl Default for WalletApp {
     fn default() -> Self {
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            page: Page::Home,
+            wallet: bdk_utils::create_new(),
+            electrum_url: "".into(),
+            db_url: "".into(),
+            wallet_words:
+                "rigid electric alert high ethics mystery pear reform alley height repeat manual"
+                    .into(),
+            debug: "".into(),
         }
     }
 }
 
-impl TemplateApp {
+impl WalletApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -35,7 +66,7 @@ impl TemplateApp {
     }
 }
 
-impl eframe::App for TemplateApp {
+impl eframe::App for WalletApp {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
@@ -65,45 +96,18 @@ impl eframe::App for TemplateApp {
             });
         });
 
+        egui::SidePanel::left("side").show(ctx, |ui| sidepanel(self, ui));
+
         egui::CentralPanel::default().show(ctx, |ui| {
-            // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
-
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
-            });
-
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
-            }
-
-            ui.separator();
-
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
+            match self.page {
+                Page::Home => home::home(self, ui),
+                Page::Transaction => transactions::transaction(self, ui),
+                Page::Settings => settings::settings(self, ui),
+            };
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
                 egui::warn_if_debug_build(ui);
             });
         });
     }
-}
-
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
-        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-        ui.label(" and ");
-        ui.hyperlink_to(
-            "eframe",
-            "https://github.com/emilk/egui/tree/master/crates/eframe",
-        );
-        ui.label(".");
-    });
 }
