@@ -3,23 +3,6 @@
 version = 3
 
 [[package]]
-name = "Seashell"
-version = "0.1.0"
-dependencies = [
- "bdk_electrum",
- "bdk_file_store",
- "bdk_sqlite",
- "bdk_wallet",
- "eframe",
- "egui",
- "env_logger",
- "log",
- "serde",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
 name = "ab_glyph"
 version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2627,6 +2610,23 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "seashell"
+version = "0.1.0"
+dependencies = [
+ "bdk_electrum",
+ "bdk_file_store",
+ "bdk_sqlite",
+ "bdk_wallet",
+ "eframe",
+ "egui",
+ "env_logger",
+ "log",
+ "serde",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
 
 [[package]]
 name = "secp256k1"

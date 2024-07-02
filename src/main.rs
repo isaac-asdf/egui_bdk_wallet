@@ -20,7 +20,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "BTC Wallet",
         native_options,
-        Box::new(|cc| Box::new(Seashell::WalletApp::new(cc))),
+        Box::new(|cc| Box::new(seashell::WalletApp::new(cc))),
     )
 }
 

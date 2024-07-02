@@ -9,13 +9,14 @@ use crate::bdk_utils;
 pub struct WalletApp {
     /// Currently viewed page
     #[serde(skip)] // This how you opt-out of serialization of a field
-    page: Page,
+    pub page: Page,
     #[serde(skip)]
-    wallet: Wallet,
-    wallet_words: String,
-    electrum_url: String,
-    db_url: String,
-    debug: String,
+    pub wallet: Wallet,
+    pub wallet_words: String,
+    pub electrum_url: String,
+    pub db_url: String,
+    #[serde(skip)]
+    pub debug: String,
 }
 
 // #[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize)]
@@ -24,7 +25,7 @@ pub struct WalletApp {
 // }
 
 #[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize)]
-enum Page {
+pub enum Page {
     Home,
     Transaction,
     Settings,
