@@ -65,9 +65,10 @@ pub fn sync_db(app_state: &mut WalletApp) {
 
     // Populate the electrum client's transaction cache so it doesn't redownload transaction we
     // already have.
-    client.populate_tx_cache(&app_state.wallet);
+    client.populate_tx_cache(&app_state.wallet.wallet);
 
     let request = app_state
+        .wallet
         .wallet
         .start_full_scan()
         .inspect_spks_for_all_keychains({
@@ -90,11 +91,11 @@ pub fn sync_db(app_state: &mut WalletApp) {
     let now = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs();
     let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
-    app_state.wallet.apply_update(update).unwrap();
-    if let Some(changeset) = app_state.wallet.take_staged() {
+    app_state.wallet.wallet.apply_update(update).unwrap();
+    if let Some(changeset) = app_state.wallet.wallet.take_staged() {
         db.append_changeset(&changeset).unwrap();
     }
 
-    let balance = app_state.wallet.balance();
+    let balance = app_state.wallet.wallet.balance();
     app_state.debug = format!("Wallet balance after syncing: {} sats", balance.total());
 }

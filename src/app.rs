@@ -1,7 +1,10 @@
-use bdk_wallet::Wallet;
+use bdk_wallet::{wallet, Wallet};
 use sidepanel::sidepanel;
 
 use crate::bdk_utils;
+
+const DEFAULT_WORDS: &str =
+    "rigid electric alert high ethics mystery pear reform alley height repeat manual";
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -11,18 +14,24 @@ pub struct WalletApp {
     #[serde(skip)] // This how you opt-out of serialization of a field
     pub page: Page,
     #[serde(skip)]
-    pub wallet: Wallet,
-    pub wallet_words: String,
-    pub electrum_url: String,
-    pub db_url: String,
-    #[serde(skip)]
     pub debug: String,
+    #[serde(skip)]
+    pub wallet: WalletInfo,
+    pub settings: Settings,
 }
 
-// #[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize)]
-// struct Wallet {
-//     xpub:
-// }
+#[derive(Debug)]
+pub struct WalletInfo {
+    pub wallet: Wallet,
+    pub wallet_words: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct Settings {
+    pub electrum_url: String,
+    pub wallet_db: String,
+}
 
 #[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize)]
 pub enum Page {
@@ -40,12 +49,15 @@ impl Default for WalletApp {
     fn default() -> Self {
         Self {
             page: Page::Home,
-            wallet: bdk_utils::create_new(),
-            electrum_url: "".into(),
-            db_url: "".into(),
-            wallet_words:
-                "rigid electric alert high ethics mystery pear reform alley height repeat manual"
-                    .into(),
+            settings: Settings {
+                electrum_url: "".into(),
+                wallet_db: "".into(),
+            },
+            wallet: WalletInfo {
+                wallet: bdk_utils::create_new(),
+                wallet_words: DEFAULT_WORDS.into(),
+                name: "".into(),
+            },
             debug: "".into(),
         }
     }

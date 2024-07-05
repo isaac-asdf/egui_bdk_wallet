@@ -7,13 +7,13 @@ pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
 
     if ui.button("Create Wallet from Words").clicked() {
         // Parse a mnemonic
-        let words = Mnemonic::parse(&app_state.wallet_words);
+        let words = Mnemonic::parse(&app_state.wallet.wallet_words);
         if let Ok(words) = words {
-            app_state.wallet = bdk_utils::from_words(words);
+            app_state.wallet.wallet = bdk_utils::from_words(words);
         } else {
-            app_state.wallet_words += " word parse failed";
+            app_state.wallet.wallet_words += " word parse failed";
         }
-        let balance = app_state.wallet.balance();
+        let balance = app_state.wallet.wallet.balance();
         app_state.debug = format!("Wallet balance after syncing: {} sats", balance.total());
     }
     if ui.button("Load changeset").clicked() {
@@ -37,11 +37,12 @@ pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     }
 
     ui.label("Words");
-    ui.text_edit_multiline(&mut app_state.wallet_words);
+    ui.text_edit_multiline(&mut app_state.wallet.wallet_words);
     ui.label("Wallet Info");
     ui.label(format!(
         "{:#?}",
         app_state
+            .wallet
             .wallet
             .get_descriptor_for_keychain(KeychainKind::External)
             .to_string()
