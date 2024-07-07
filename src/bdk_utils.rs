@@ -2,7 +2,7 @@ use bdk_wallet::{
     bitcoin::Network,
     keys::{bip39::Mnemonic, DerivableKey, ExtendedKey},
     template::Bip84,
-    wallet::{ChangeSet, Wallet},
+    wallet::{Balance, ChangeSet, Wallet},
     KeychainKind,
 };
 
@@ -50,8 +50,8 @@ pub fn from_words(words: Mnemonic) -> Wallet {
     wallet
 }
 
-pub fn sync_db(app_state: &mut WalletApp) {
-    let db_path = std::env::temp_dir().join("bdk-from-sparrow");
+pub fn sync_db(db_path: &str, wallet: &mut Wallet) -> Balance {
+    let db_path = std::env::temp_dir().join(db_path);
     let mut db = bdk_file_store::Store::<bdk_wallet::wallet::ChangeSet>::open_or_create_new(
         b"magic_bytes",
         db_path,
@@ -64,11 +64,9 @@ pub fn sync_db(app_state: &mut WalletApp) {
 
     // Populate the electrum client's transaction cache so it doesn't redownload transaction we
     // already have.
-    client.populate_tx_cache(&app_state.wallet.wallet);
+    client.populate_tx_cache(&wallet);
 
-    let request = app_state
-        .wallet
-        .wallet
+    let request = wallet
         .start_full_scan()
         .inspect_spks_for_all_keychains({
             let mut once = HashSet::<KeychainKind>::new();
@@ -90,11 +88,10 @@ pub fn sync_db(app_state: &mut WalletApp) {
     let now = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs();
     let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
-    app_state.wallet.wallet.apply_update(update).unwrap();
-    if let Some(changeset) = app_state.wallet.wallet.take_staged() {
+    wallet.apply_update(update).unwrap();
+    if let Some(changeset) = wallet.take_staged() {
         db.append_changeset(&changeset).unwrap();
     }
 
-    let balance = app_state.wallet.wallet.balance();
-    app_state.debug = format!("Wallet balance after syncing: {} sats", balance.total());
+    wallet.balance()
 }

@@ -1,13 +1,10 @@
-use core::time;
-use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::thread;
+use std::sync::{mpsc, Arc, Mutex};
 
 use bdk_wallet::Wallet;
 use sidepanel::sidepanel;
 
-use crate::messages::WalletResponse;
-use crate::wallet::{monitor_wallet, WalletBackground};
+use crate::wallet::WalletBackground;
 use crate::{bdk_utils, messages};
 
 const DEFAULT_WORDS: &str =
@@ -16,24 +13,23 @@ const DEFAULT_WORDS: &str =
 pub struct WalletApp {
     pub page: Page,
     pub debug: String,
-    pub wallet: WalletInfo,
+    pub wallet_info: WalletInfo,
     pub counter: i32,
     pub settings: Settings,
+    pub wallet: Arc<Mutex<Wallet>>,
     pub wallet_req: Sender<messages::WalletRequest>,
     pub wallet_updates: Receiver<messages::WalletResponse>,
 }
 
 #[derive(Debug)]
 pub struct WalletInfo {
-    pub wallet: Wallet,
     pub wallet_words: String,
     pub name: String,
 }
 
 impl WalletInfo {
-    fn from_wallet(wallet: Wallet) -> Self {
+    fn from_wallet() -> Self {
         Self {
-            wallet,
             wallet_words: DEFAULT_WORDS.into(),
             name: "test".into(),
         }
@@ -84,14 +80,17 @@ impl WalletApp {
             let recv = req.1;
             let send = resp.0;
             let bg = WalletBackground::new(recv, send);
-            monitor_wallet(bg);
+            bg.monitor_wallet();
         });
+
+        let wallet = Arc::new(Mutex::new(bdk_utils::create_new()));
 
         WalletApp {
             page: Page::Home,
             debug: "".into(),
             counter: 0,
-            wallet: WalletInfo::from_wallet(bdk_utils::create_new()),
+            wallet,
+            wallet_info: WalletInfo::from_wallet(),
             settings: Settings::new(),
             wallet_req: req.0,
             wallet_updates: resp.1,

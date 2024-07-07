@@ -1,10 +1,14 @@
+use std::sync::{Arc, Mutex};
+
 use crate::{
     bdk_utils,
-    messages::{WalletRequest, WalletResponse},
+    messages::{Sync, WalletRequest, WalletResponse},
     WalletApp,
 };
 
 use bdk_wallet::{keys::bip39::Mnemonic, KeychainKind, Wallet};
+
+const DB_PATH: &str = "bdk-from-sparrow";
 
 pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     ui.heading("Home");
@@ -13,6 +17,7 @@ pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     if let Ok(new_wallet) = new_wallet {
         match new_wallet {
             WalletResponse::Echo(e) => app_state.counter = e,
+            WalletResponse::Sync(s) => app_state.debug = format!("balance: {}", s),
         };
     }
     ui.horizontal(|ui| {
@@ -27,17 +32,17 @@ pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
 
     if ui.button("Create Wallet from Words").clicked() {
         // Parse a mnemonic
-        let words = Mnemonic::parse(&app_state.wallet.wallet_words);
+        let words = Mnemonic::parse(&app_state.wallet_info.wallet_words);
         if let Ok(words) = words {
-            app_state.wallet.wallet = bdk_utils::from_words(words);
+            app_state.wallet = Arc::new(Mutex::new(bdk_utils::from_words(words)));
         } else {
-            app_state.wallet.wallet_words += " word parse failed";
+            app_state.wallet_info.wallet_words += " word parse failed";
         }
-        let balance = app_state.wallet.wallet.balance();
-        app_state.debug = format!("Wallet balance after syncing: {} sats", balance.total());
+        // let balance = app_state.wallet.balance();
+        // app_state.debug = format!("Wallet balance after syncing: {} sats", balance.total());
     }
     if ui.button("Load changeset").clicked() {
-        let db_path = std::env::temp_dir().join("bdk-from-sparrow");
+        let db_path = std::env::temp_dir().join(DB_PATH);
         let mut db =
             bdk_file_store::Store::<bdk_wallet::wallet::ChangeSet>::open(b"magic_bytes", db_path)
                 .unwrap();
@@ -50,7 +55,13 @@ pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     }
 
     if ui.button("Sync").clicked() {
-        bdk_utils::sync_db(app_state);
+        app_state
+            .wallet_req
+            .send(WalletRequest::Sync(Sync {
+                wallet: app_state.wallet.clone(),
+                db_path: DB_PATH.into(),
+            }))
+            .expect("bg thread died");
     }
 
     if app_state.debug.len() > 0 {
@@ -59,14 +70,14 @@ pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     }
 
     ui.label("Words");
-    ui.text_edit_multiline(&mut app_state.wallet.wallet_words);
+    ui.text_edit_multiline(&mut app_state.wallet_info.wallet_words);
     ui.label("Wallet Info");
-    ui.label(format!(
-        "{:#?}",
-        app_state
-            .wallet
-            .wallet
-            .get_descriptor_for_keychain(KeychainKind::External)
-            .to_string()
-    ));
+    if let Ok(wallet) = app_state.wallet.try_lock() {
+        ui.label(format!(
+            "{:#?}",
+            wallet
+                .get_descriptor_for_keychain(KeychainKind::External)
+                .to_string()
+        ));
+    }
 }
