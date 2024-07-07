@@ -1,23 +1,26 @@
-use bdk_wallet::{wallet, Wallet};
+use core::time;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
+
+use bdk_wallet::Wallet;
 use sidepanel::sidepanel;
 
-use crate::bdk_utils;
+use crate::messages::WalletResponse;
+use crate::wallet::{monitor_wallet, WalletBackground};
+use crate::{bdk_utils, messages};
 
 const DEFAULT_WORDS: &str =
     "rigid electric alert high ethics mystery pear reform alley height repeat manual";
 
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct WalletApp {
-    /// Currently viewed page
-    #[serde(skip)] // This how you opt-out of serialization of a field
     pub page: Page,
-    #[serde(skip)]
     pub debug: String,
-    #[serde(skip)]
     pub wallet: WalletInfo,
+    pub counter: i32,
     pub settings: Settings,
+    pub wallet_req: Sender<messages::WalletRequest>,
+    pub wallet_updates: Receiver<messages::WalletResponse>,
 }
 
 #[derive(Debug)]
@@ -27,13 +30,32 @@ pub struct WalletInfo {
     pub name: String,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+impl WalletInfo {
+    fn from_wallet(wallet: Wallet) -> Self {
+        Self {
+            wallet,
+            wallet_words: DEFAULT_WORDS.into(),
+            name: "test".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Settings {
     pub electrum_url: String,
     pub wallet_db: String,
 }
 
-#[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize)]
+impl Settings {
+    fn new() -> Self {
+        Self {
+            electrum_url: "".into(),
+            wallet_db: "".into(),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum Page {
     Home,
     Transaction,
@@ -45,44 +67,42 @@ mod settings;
 mod sidepanel;
 mod transactions;
 
-impl Default for WalletApp {
-    fn default() -> Self {
-        Self {
-            page: Page::Home,
-            settings: Settings {
-                electrum_url: "".into(),
-                wallet_db: "".into(),
-            },
-            wallet: WalletInfo {
-                wallet: bdk_utils::create_new(),
-                wallet_words: DEFAULT_WORDS.into(),
-                name: "".into(),
-            },
-            debug: "".into(),
-        }
-    }
-}
-
 impl WalletApp {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+        let req: (
+            Sender<messages::WalletRequest>,
+            Receiver<messages::WalletRequest>,
+        ) = mpsc::channel();
+        let resp: (
+            Sender<messages::WalletResponse>,
+            Receiver<messages::WalletResponse>,
+        ) = mpsc::channel();
+        std::thread::spawn(move || {
+            let recv = req.1;
+            let send = resp.0;
+            let bg = WalletBackground::new(recv, send);
+            monitor_wallet(bg);
+        });
 
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        WalletApp {
+            page: Page::Home,
+            debug: "".into(),
+            counter: 0,
+            wallet: WalletInfo::from_wallet(bdk_utils::create_new()),
+            settings: Settings::new(),
+            wallet_req: req.0,
+            wallet_updates: resp.1,
         }
-
-        Default::default()
     }
 }
 
 impl eframe::App for WalletApp {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
+        // eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.

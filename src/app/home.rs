@@ -1,9 +1,29 @@
-use crate::{bdk_utils, WalletApp};
+use crate::{
+    bdk_utils,
+    messages::{WalletRequest, WalletResponse},
+    WalletApp,
+};
 
 use bdk_wallet::{keys::bip39::Mnemonic, KeychainKind};
 
 pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     ui.heading("Home");
+
+    let new_wallet = app_state.wallet_updates.try_recv();
+    if let Ok(new_wallet) = new_wallet {
+        match new_wallet {
+            WalletResponse::Echo(e) => app_state.counter = e,
+        };
+    }
+    ui.horizontal(|ui| {
+        ui.label(format!("Last Echo: {}", app_state.counter));
+        if ui.button("Send Echo").clicked() {
+            app_state
+                .wallet_req
+                .send(WalletRequest::Echo(app_state.counter + 1))
+                .expect("Background thread died");
+        }
+    });
 
     if ui.button("Create Wallet from Words").clicked() {
         // Parse a mnemonic

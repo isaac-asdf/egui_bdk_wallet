@@ -8,7 +8,6 @@ use bdk_wallet::{
 
 use bdk_electrum::electrum_client;
 use bdk_electrum::BdkElectrumClient;
-use bdk_file_store::Store;
 use std::collections::HashSet;
 use std::io::Write;
 
