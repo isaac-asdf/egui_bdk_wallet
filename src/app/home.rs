@@ -4,7 +4,7 @@ use crate::{
     WalletApp,
 };
 
-use bdk_wallet::{keys::bip39::Mnemonic, KeychainKind};
+use bdk_wallet::{keys::bip39::Mnemonic, KeychainKind, Wallet};
 
 pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     ui.heading("Home");
@@ -37,14 +37,16 @@ pub fn home(app_state: &mut WalletApp, ui: &mut egui::Ui) {
         app_state.debug = format!("Wallet balance after syncing: {} sats", balance.total());
     }
     if ui.button("Load changeset").clicked() {
-        let db_path = std::env::temp_dir().join("bdk-electrum-example");
+        let db_path = std::env::temp_dir().join("bdk-from-sparrow");
         let mut db =
             bdk_file_store::Store::<bdk_wallet::wallet::ChangeSet>::open(b"magic_bytes", db_path)
                 .unwrap();
-        // let changeset =
-        // let wallet = Wallet::load_from_changeset(changeset).unwrap();
-        // let balance = wallet.balance();
-        // app_state.debug = format!("Wallet balance after syncing: {} sats", balance.total());
+        let changeset = db
+            .aggregate_changesets()
+            .expect("there must be an existing changeset");
+        let wallet = Wallet::load_from_changeset(changeset.unwrap()).unwrap();
+        let balance = wallet.balance();
+        app_state.debug = format!("Wallet balance after syncing: {} sats", balance.total());
     }
 
     if ui.button("Sync").clicked() {
