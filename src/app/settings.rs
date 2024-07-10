@@ -1,6 +1,6 @@
 use crate::WalletApp;
 
-pub fn settings(app_state: &mut WalletApp, ui: &mut egui::Ui) {
+pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     ui.heading("Settings");
 
     ui.horizontal(|ui| {

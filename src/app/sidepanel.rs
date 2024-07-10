@@ -7,8 +7,16 @@ pub fn sidepanel(app_state: &mut WalletApp, ui: &mut egui::Ui) {
         app_state.page = Page::Home;
     }
 
-    if ui.button("Transaction").clicked() {
-        app_state.page = Page::Transaction;
+    if ui.button("Send").clicked() {
+        app_state.page = Page::Send;
+    }
+
+    if ui.button("Receive").clicked() {
+        app_state.page = Page::Receive;
+    }
+
+    if ui.button("Transactions").clicked() {
+        app_state.page = Page::Transactions;
     }
 
     if ui.button("Settings").clicked() {
