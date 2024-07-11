@@ -5,8 +5,8 @@ use bdk_wallet::bitcoin::Transaction;
 use bdk_wallet::wallet::Balance;
 use sidepanel::sidepanel;
 
+use crate::messages;
 use crate::wallet::WalletBackground;
-use crate::{bdk_utils, messages};
 
 const DEFAULT_WORDS: &str =
     "rigid electric alert high ethics mystery pear reform alley height repeat manual";
@@ -113,13 +113,15 @@ impl ReceiveState {
 pub struct Settings {
     pub electrum_url: String,
     pub wallet_db: String,
+    pub new_wallet_seed: String,
 }
 
 impl Settings {
     fn new() -> Self {
         Self {
-            electrum_url: "".into(),
-            wallet_db: "".into(),
+            electrum_url: "ssl://electrum.blockstream.info:60002".into(),
+            wallet_db: "wallets".into(),
+            new_wallet_seed: DEFAULT_WORDS.into(),
         }
     }
 }
@@ -138,6 +140,8 @@ impl WalletApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+        let settings = Settings::new();
+        let cl = settings.clone();
         let req: (
             Sender<messages::WalletRequest>,
             Receiver<messages::WalletRequest>,
@@ -149,7 +153,7 @@ impl WalletApp {
         std::thread::spawn(move || {
             let recv = req.1;
             let send = resp.0;
-            let mut bg = WalletBackground::new(bdk_utils::create_new(), recv, send);
+            let mut bg = WalletBackground::new(cl.into(), recv, send);
             bg.monitor_wallet();
         });
 
@@ -160,7 +164,7 @@ impl WalletApp {
             home: HomeState::new(),
             send: SendState::new(),
             receive: ReceiveState::new(),
-            settings: Settings::new(),
+            settings,
             wallet_req: req.0,
             wallet_updates: resp.1,
         }

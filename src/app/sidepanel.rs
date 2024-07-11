@@ -22,4 +22,5 @@ pub fn sidepanel(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     if ui.button("Settings").clicked() {
         app_state.page = Page::Settings;
     }
+    ui.label(&app_state.debug);
 }

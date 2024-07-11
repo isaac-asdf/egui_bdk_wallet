@@ -11,10 +11,19 @@ use bdk_electrum::BdkElectrumClient;
 use std::collections::HashSet;
 use std::io::Write;
 
-use crate::WalletApp;
-
 const STOP_GAP: usize = 50;
 const BATCH_SIZE: usize = 5;
+
+pub fn from_changeset(db: &str) -> Result<Wallet, bool> {
+    let db_path = std::env::temp_dir().join(db);
+    let mut db = bdk_file_store::Store::<ChangeSet>::open_or_create_new(b"magic_bytes", db_path)
+        .map_err(|_| true)?;
+    let changeset = db.aggregate_changesets();
+    match changeset {
+        Ok(Some(c)) => Ok(Wallet::load_from_changeset(c).map_err(|_| false)?),
+        _ => Err(true),
+    }
+}
 
 pub fn create_new() -> Wallet {
     // Open or create a new file store for wallet data.
