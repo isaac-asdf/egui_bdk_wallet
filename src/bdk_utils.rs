@@ -1,106 +1,100 @@
 use bdk_wallet::{
-    bitcoin::Network,
+    bitcoin::{
+        key::rand::{thread_rng, Rng},
+        Network,
+    },
+    chain::{local_chain::CheckPoint, Persisted},
     keys::{bip39::Mnemonic, DerivableKey, ExtendedKey},
     template::Bip84,
-    wallet::{Balance, ChangeSet, Wallet},
-    KeychainKind,
+    Balance, KeychainKind, PersistedWallet, Wallet,
 };
 
 use bdk_electrum::electrum_client;
 use bdk_electrum::BdkElectrumClient;
-use std::collections::HashSet;
-use std::io::Write;
+use bdk_wallet::rusqlite::Connection;
+use std::path::PathBuf;
+
+const DB_PATH: &str = "/Users/isaac/Desktop/wallets/test.db";
 
 const STOP_GAP: usize = 50;
 const BATCH_SIZE: usize = 5;
 
-pub fn from_changeset(db: &str) -> Result<Wallet, bool> {
-    let db_path = std::env::temp_dir().join(db);
-    let mut db = bdk_file_store::Store::<ChangeSet>::open_or_create_new(b"magic_bytes", db_path)
-        .map_err(|_| true)?;
-    let changeset = db.aggregate_changesets();
-    match changeset {
-        Ok(Some(c)) => Ok(Wallet::load_from_changeset(c).map_err(|_| false)?),
-        _ => Err(true),
+pub fn from_changeset(_db: &str) -> Result<Persisted<Wallet>, bool> {
+    let mut db = Connection::open(PathBuf::from(DB_PATH)).unwrap();
+    let wallet = Wallet::load().load_wallet(&mut db);
+    match wallet {
+        Ok(w) => match w {
+            Some(w) => Ok(w),
+            None => Err(false),
+        },
+        Err(_) => Err(false),
     }
 }
 
-pub fn create_new() -> Wallet {
-    // Open or create a new file store for wallet data.
-    let db_path = std::env::temp_dir().join("bdk-electrum-example-new");
-    let mut db = bdk_file_store::Store::<ChangeSet>::open_or_create_new(b"magic_bytes", db_path)
-        .expect("create store");
-    let changeset = db.aggregate_changesets().expect("changeset loaded");
-
-    // Create a wallet with initial wallet data read from the file store.
-    let descriptor = "wpkh(tprv8ZgxMBicQKsPdcAqYBpzAFwU5yxBUo88ggoBqu1qPcHUfSbKK1sKMLmC7EAk438btHQrSdu3jGGQa6PA71nvH5nkDexhLteJqkM4dQmWF9g/84'/1'/0'/0/*)";
-    let change_descriptor = "wpkh(tprv8ZgxMBicQKsPdcAqYBpzAFwU5yxBUo88ggoBqu1qPcHUfSbKK1sKMLmC7EAk438btHQrSdu3jGGQa6PA71nvH5nkDexhLteJqkM4dQmWF9g/84'/1'/0'/1/*)";
-    let wallet = Wallet::new_or_load(descriptor, change_descriptor, changeset, Network::Testnet)
-        .expect("create or load wallet");
-    wallet
+/// Create a wallet that is persisted to SQLite database.
+pub fn create_new() -> (PersistedWallet, Mnemonic) {
+    // Create a new random number generator
+    let mut rng = thread_rng();
+    // Generate 256 bits of entropy
+    let entropy: [u8; 32] = rng.gen();
+    let words = Mnemonic::from_entropy(&entropy).unwrap();
+    // Create extended key to generate descriptors
+    (from_words(words.clone()), words)
 }
 
-pub fn from_words(words: Mnemonic) -> Wallet {
-    let db_path = std::env::temp_dir().join("bdk-from-sparrow");
-    let mut db = bdk_file_store::Store::<ChangeSet>::open_or_create_new(b"magic_bytes", db_path)
-        .expect("create store");
-    let changeset = db.aggregate_changesets().expect("changeset loaded");
-
-    // create main desc
+pub fn from_words(words: Mnemonic) -> PersistedWallet {
+    let mut db = Connection::open(PathBuf::from(DB_PATH)).unwrap();
     let xkey: ExtendedKey = words.into_extended_key().unwrap();
     let xprv = xkey.into_xprv(Network::Testnet).unwrap();
-    let wallet = Wallet::new_or_load(
+    let wallet = Wallet::create(
         Bip84(xprv.clone(), KeychainKind::External),
         Bip84(xprv, KeychainKind::Internal),
-        changeset,
-        Network::Testnet,
     )
+    .network(Network::Testnet)
+    .create_wallet(&mut db)
     .unwrap();
+
     wallet
 }
 
-pub fn sync_db(db_path: &str, wallet: &mut Wallet) -> Balance {
-    let db_path = std::env::temp_dir().join(db_path);
-    let mut db = bdk_file_store::Store::<bdk_wallet::wallet::ChangeSet>::open_or_create_new(
-        b"magic_bytes",
-        db_path,
-    )
-    .unwrap();
+pub fn cp_sync(_cp: CheckPoint, _db_path: &str, wallet: &mut PersistedWallet) -> Balance {
+    let client = BdkElectrumClient::new(
+        electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
+    );
+    let sync_request = wallet.start_sync_with_revealed_spks();
+    let update = client.sync(sync_request, BATCH_SIZE, true).unwrap();
 
+    // Apply the update to the wallet
+    wallet.apply_update(update).unwrap();
+    persist(wallet);
+    wallet.balance()
+}
+
+pub fn full_scan(_db_path: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );
 
     // Populate the electrum client's transaction cache so it doesn't redownload transaction we
     // already have.
-    client.populate_tx_cache(&wallet);
+    // client.populate_tx_cache(&wallet);
 
-    let request = wallet
-        .start_full_scan()
-        .inspect_spks_for_all_keychains({
-            let mut once = HashSet::<KeychainKind>::new();
-            move |k, spk_i, _| {
-                if once.insert(k) {
-                    print!("\nScanning keychain [{:?}]", k)
-                } else {
-                    print!(" {:<3}", spk_i)
-                }
-            }
-        })
-        .inspect_spks_for_all_keychains(|_, _, _| std::io::stdout().flush().expect("must flush"));
+    // Perform the initial full scan on the wallet
+    let full_scan_request = wallet.start_full_scan();
     let mut update = client
-        .full_scan(request, STOP_GAP, BATCH_SIZE, false)
-        .unwrap()
-        .with_confirmation_time_height_anchor(&client)
+        .full_scan(full_scan_request, STOP_GAP, BATCH_SIZE, true)
         .unwrap();
 
     let now = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs();
     let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
     wallet.apply_update(update).unwrap();
-    if let Some(changeset) = wallet.take_staged() {
-        db.append_changeset(&changeset).unwrap();
-    }
+    persist(wallet);
+    let balance = wallet.balance();
+    balance
+}
 
-    wallet.balance()
+fn persist(wallet: &mut PersistedWallet) {
+    let mut db = Connection::open(PathBuf::from(DB_PATH)).unwrap();
+    wallet.persist(&mut db).unwrap();
 }

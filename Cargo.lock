@@ -470,22 +470,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "bdk_electrum"
-version = "0.15.0"
+name = "bdk_chain"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01aa7f890313a33b27bcdcbb8efe98450710fce5af51e7ab013ef6d179252ffa"
+checksum = "50d03673ebb8fe45a2d65dbb24f1fa810dcbf7d350ef7dae084ebad312e2cae7"
 dependencies = [
- "bdk_chain",
+ "bitcoin",
+ "miniscript",
+ "rusqlite",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "bdk_electrum"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0969a697cc91bc4f852dca83b3fa5e0513b3bbd17e4b781135c5155b8685841"
+dependencies = [
+ "bdk_chain 0.17.0",
  "electrum-client",
 ]
 
 [[package]]
 name = "bdk_file_store"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "180f7ef84b5da0e748f7884becb364f4d06d12734ec46b149b9f02600afdf011"
+checksum = "39bed010acc658fa64fed1a9e1f572ae1bf29f3bbbaaaa74d08db794b01485ed"
 dependencies = [
- "bdk_chain",
+ "bdk_chain 0.17.0",
  "bincode",
  "serde",
 ]
@@ -496,7 +509,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0926dc5778fb3c5afaf7def9ed9b9c9d9fe9e3ba499e09cb816d3de43211be71"
 dependencies = [
- "bdk_chain",
+ "bdk_chain 0.16.0",
  "rusqlite",
  "serde",
  "serde_json",
@@ -504,17 +517,15 @@ dependencies = [
 
 [[package]]
 name = "bdk_wallet"
-version = "1.0.0-alpha.13"
+version = "1.0.0-beta.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2926afdbfc54ebf7df2caa51af5be4435b90c01c6fbe5578b51b7c2c0a264bd9"
+checksum = "49d37a46443951e1a587c433420657a7448bce4a601116869c90d29111281b3e"
 dependencies = [
- "bdk_chain",
+ "bdk_chain 0.17.0",
  "bip39",
  "bitcoin",
- "getrandom",
- "js-sys",
  "miniscript",
- "rand",
+ "rand_core",
  "serde",
  "serde_json",
 ]

@@ -2,7 +2,8 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
 use bdk_wallet::bitcoin::Transaction;
-use bdk_wallet::wallet::Balance;
+use bdk_wallet::LocalOutput;
+use bdk_wallet::{AddressInfo, Balance};
 use sidepanel::sidepanel;
 
 use crate::messages;
@@ -22,7 +23,7 @@ pub struct WalletApp {
     /// Currently viewed page
     pub page: Page,
     /// for debug purposes
-    pub debug: String,
+    pub debug: Vec<String>,
     /// UI display for wallet info
     pub wallet_info: WalletInfo,
     /// State for Home page
@@ -69,11 +70,13 @@ impl HomeState {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct SendState {
     pub pay_to_addr: String,
     pub label: String,
     pub sats_amount: u64,
-    pub selected_utxos: Vec<i32>,
+    pub sats_entry: String,
+    pub selected_utxos: Vec<LocalOutput>,
     pub fee_rate: f32,
     pub fees: u64,
 }
@@ -84,6 +87,7 @@ impl SendState {
             pay_to_addr: "".into(),
             label: "".into(),
             sats_amount: 0,
+            sats_entry: "".into(),
             selected_utxos: Vec::new(),
             fee_rate: 1.,
             fees: 0,
@@ -95,7 +99,7 @@ pub struct ReceiveState {
     pub pay_to_addr: String,
     pub label: String,
     pub derivation: String,
-    pub next_addr: Vec<String>,
+    pub next_addr: Vec<AddressInfo>,
 }
 
 impl ReceiveState {
@@ -159,7 +163,7 @@ impl WalletApp {
 
         WalletApp {
             page: Page::Home,
-            debug: "".into(),
+            debug: Vec::new(),
             wallet_info: WalletInfo::from_wallet(),
             home: HomeState::new(),
             send: SendState::new(),
@@ -173,7 +177,7 @@ impl WalletApp {
 
 impl eframe::App for WalletApp {
     /// Called by the frame work to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
         // eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
@@ -185,8 +189,15 @@ impl eframe::App for WalletApp {
         if let Ok(update) = update {
             // update state
             match update {
-                messages::WalletResponse::Debug(s) => self.debug = s,
+                messages::WalletResponse::Debug(s) => {
+                    self.debug.push(s);
+                    if self.debug.len() > 5 {
+                        self.debug.remove(0);
+                    }
+                }
                 messages::WalletResponse::Sync(b) => self.home.balance = Some(b),
+                messages::WalletResponse::UtxoList(utxos) => self.send.selected_utxos = utxos,
+                messages::WalletResponse::RecvAddresses(addrs) => self.receive.next_addr = addrs,
             }
         }
 
@@ -221,6 +232,9 @@ impl eframe::App for WalletApp {
             };
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                self.debug.iter().for_each(|s| {
+                    ui.label(s).highlight();
+                });
                 egui::warn_if_debug_build(ui);
             });
         });

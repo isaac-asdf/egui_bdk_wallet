@@ -1,6 +1,6 @@
-use bdk_wallet::{wallet::Balance, Wallet};
+use bdk_wallet::{bitcoin::Transaction, AddressInfo, Balance, LocalOutput, PersistedWallet};
 
-use crate::app::Settings;
+use crate::app::{SendState, Settings};
 
 pub struct AppConfig {
     pub wallets_loc: String,
@@ -16,11 +16,34 @@ impl From<Settings> for AppConfig {
     }
 }
 
+pub struct TxParts {
+    pub sats_amount: u64,
+    pub addr: String,
+    pub utxos: Option<Vec<LocalOutput>>,
+}
+
+impl From<SendState> for TxParts {
+    fn from(value: SendState) -> Self {
+        let utxos = if value.selected_utxos.len() > 0 {
+            Some(value.selected_utxos)
+        } else {
+            None
+        };
+        TxParts {
+            sats_amount: value.sats_amount,
+            addr: value.pay_to_addr,
+            utxos,
+        }
+    }
+}
+
 pub enum WalletRequest {
     Debug(String),
     Sync,
-    CreateNew(Wallet),
+    CreateNew(PersistedWallet),
     AppConfig(AppConfig),
+    CreateTransaction(TxParts),
+    SendTransaction(Transaction),
 }
 
 // pub struct WalletResponse {
@@ -29,4 +52,6 @@ pub enum WalletRequest {
 pub enum WalletResponse {
     Debug(String),
     Sync(Balance),
+    RecvAddresses(Vec<AddressInfo>),
+    UtxoList(Vec<LocalOutput>),
 }

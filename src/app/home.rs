@@ -1,7 +1,5 @@
 use crate::{messages::WalletRequest, WalletApp};
 
-use bdk_wallet::{keys::bip39::Mnemonic, KeychainKind, Wallet};
-
 pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     ui.heading("Home");
 
