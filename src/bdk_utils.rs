@@ -14,13 +14,27 @@ use bdk_electrum::BdkElectrumClient;
 use bdk_wallet::rusqlite::Connection;
 use std::path::PathBuf;
 
-const DB_PATH: &str = "/Users/isaac/Desktop/wallets/test.db";
+const DB_PATH: &str = "/home/isaac/Desktop/wallets/";
 
 const STOP_GAP: usize = 50;
 const BATCH_SIZE: usize = 5;
 
+pub fn list_wallets() -> Vec<String> {
+    let files = std::fs::read_dir(DB_PATH).unwrap();
+    files
+        .into_iter()
+        .filter_map(|f| {
+            if let Ok(entry) = f {
+                return Some(entry.file_name().into_string().unwrap());
+            };
+            None
+        })
+        .collect()
+}
+
 pub fn from_changeset(_db: &str) -> Result<Persisted<Wallet>, bool> {
-    let mut db = Connection::open(PathBuf::from(DB_PATH)).unwrap();
+    let path = String::from(DB_PATH) + "test.db";
+    let mut db = Connection::open(PathBuf::from(path)).unwrap();
     let wallet = Wallet::load().load_wallet(&mut db);
     match wallet {
         Ok(w) => match w {

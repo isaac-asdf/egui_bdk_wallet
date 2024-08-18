@@ -6,8 +6,8 @@ use bdk_wallet::LocalOutput;
 use bdk_wallet::{AddressInfo, Balance};
 use sidepanel::sidepanel;
 
-use crate::messages;
 use crate::wallet::WalletBackground;
+use crate::{bdk_utils, messages};
 
 const DEFAULT_WORDS: &str =
     "rigid electric alert high ethics mystery pear reform alley height repeat manual";
@@ -17,6 +17,7 @@ mod receive;
 mod send;
 mod settings;
 mod sidepanel;
+mod splash;
 mod transactions;
 
 pub struct WalletApp {
@@ -26,6 +27,8 @@ pub struct WalletApp {
     pub debug: Vec<String>,
     /// UI display for wallet info
     pub wallet_info: WalletInfo,
+    /// State for Splash Screen
+    pub splash: SplashState,
     /// State for Home page
     pub home: HomeState,
     /// State for Send page
@@ -51,6 +54,36 @@ impl WalletInfo {
         Self {
             wallet_words: DEFAULT_WORDS.into(),
             name: "test".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SplashState {
+    pub selected_wallet: String,
+    pub wallets: Vec<String>,
+    pub new_name: String,
+    pub new_1: String,
+    pub new_2: String,
+    pub new_option: NewWallet,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum NewWallet {
+    Seed,
+    Xpub,
+    Descriptor,
+}
+
+impl SplashState {
+    pub fn new() -> Self {
+        SplashState {
+            selected_wallet: String::new(),
+            wallets: bdk_utils::list_wallets(),
+            new_name: String::new(),
+            new_1: String::new(),
+            new_2: String::new(),
+            new_option: NewWallet::Seed,
         }
     }
 }
@@ -130,8 +163,9 @@ impl Settings {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 pub enum Page {
+    SplashScreen,
     Home,
     Send,
     Receive,
@@ -162,9 +196,10 @@ impl WalletApp {
         });
 
         WalletApp {
-            page: Page::Home,
+            page: Page::SplashScreen,
             debug: Vec::new(),
             wallet_info: WalletInfo::from_wallet(),
+            splash: SplashState::new(),
             home: HomeState::new(),
             send: SendState::new(),
             receive: ReceiveState::new(),
@@ -220,10 +255,13 @@ impl eframe::App for WalletApp {
             });
         });
 
-        egui::SidePanel::left("side").show(ctx, |ui| sidepanel(self, ui));
+        if self.page != Page::SplashScreen {
+            egui::SidePanel::left("side").show(ctx, |ui| sidepanel(self, ui));
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             match self.page {
+                Page::SplashScreen => splash::page(self, ui),
                 Page::Home => home::page(self, ui),
                 Page::Send => send::page(self, ui),
                 Page::Receive => receive::page(self, ui),
