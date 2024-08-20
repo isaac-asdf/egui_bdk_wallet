@@ -32,7 +32,7 @@ impl WalletBackground {
         let wallet = bdk_utils::from_changeset(&config.wallets_loc);
         let wallet = match wallet {
             Ok(w) => w,
-            Err(_) => bdk_utils::create_new().0,
+            Err(_) => bdk_utils::create_new("test").0,
         };
         WalletBackground {
             wallet,
@@ -102,6 +102,9 @@ impl WalletBackground {
 
     fn handle_new_wallet(&mut self, w: PersistedWallet) {
         self.wallet = w;
+        self.wallet_updates
+            .send(WalletResponse::WalletReady)
+            .unwrap();
     }
 
     fn handle_sync(&mut self) {

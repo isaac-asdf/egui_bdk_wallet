@@ -28,7 +28,7 @@ pub struct WalletApp {
     /// UI display for wallet info
     pub wallet_info: WalletInfo,
     /// State for Splash Screen
-    pub splash: SplashState,
+    pub splash: splash::SplashState,
     /// State for Home page
     pub home: HomeState,
     /// State for Send page
@@ -54,36 +54,6 @@ impl WalletInfo {
         Self {
             wallet_words: DEFAULT_WORDS.into(),
             name: "test".into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SplashState {
-    pub selected_wallet: String,
-    pub wallets: Vec<String>,
-    pub new_name: String,
-    pub new_1: String,
-    pub new_2: String,
-    pub new_option: NewWallet,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum NewWallet {
-    Seed,
-    Xpub,
-    Descriptor,
-}
-
-impl SplashState {
-    pub fn new() -> Self {
-        SplashState {
-            selected_wallet: String::new(),
-            wallets: bdk_utils::list_wallets(),
-            new_name: String::new(),
-            new_1: String::new(),
-            new_2: String::new(),
-            new_option: NewWallet::Seed,
         }
     }
 }
@@ -199,7 +169,7 @@ impl WalletApp {
             page: Page::SplashScreen,
             debug: Vec::new(),
             wallet_info: WalletInfo::from_wallet(),
-            splash: SplashState::new(),
+            splash: splash::SplashState::new(),
             home: HomeState::new(),
             send: SendState::new(),
             receive: ReceiveState::new(),
@@ -233,6 +203,7 @@ impl eframe::App for WalletApp {
                 messages::WalletResponse::Sync(b) => self.home.balance = Some(b),
                 messages::WalletResponse::UtxoList(utxos) => self.send.selected_utxos = utxos,
                 messages::WalletResponse::RecvAddresses(addrs) => self.receive.next_addr = addrs,
+                messages::WalletResponse::WalletReady => self.page = Page::Home,
             }
         }
 

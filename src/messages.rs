@@ -50,6 +50,7 @@ pub enum WalletRequest {
 //     pub status: i32,
 // }
 pub enum WalletResponse {
+    WalletReady,
     Debug(String),
     Sync(Balance),
     RecvAddresses(Vec<AddressInfo>),

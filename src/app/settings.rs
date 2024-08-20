@@ -27,7 +27,7 @@ pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
         match new {
             Ok(new) => app_state
                 .wallet_req
-                .send(WalletRequest::CreateNew(bdk_utils::from_words(new)))
+                .send(WalletRequest::CreateNew(bdk_utils::from_words("test", new)))
                 .expect("bg failed"),
             Err(_) => app_state.settings.new_wallet_seed += " seed parse failed",
         };

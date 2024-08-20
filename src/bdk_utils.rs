@@ -46,18 +46,30 @@ pub fn from_changeset(_db: &str) -> Result<Persisted<Wallet>, bool> {
 }
 
 /// Create a wallet that is persisted to SQLite database.
-pub fn create_new() -> (PersistedWallet, Mnemonic) {
+pub fn create_new(name: &str) -> (PersistedWallet, Mnemonic) {
     // Create a new random number generator
     let mut rng = thread_rng();
     // Generate 256 bits of entropy
     let entropy: [u8; 32] = rng.gen();
     let words = Mnemonic::from_entropy(&entropy).unwrap();
     // Create extended key to generate descriptors
-    (from_words(words.clone()), words)
+    (from_words(name, words.clone()), words)
 }
 
-pub fn from_words(words: Mnemonic) -> PersistedWallet {
-    let mut db = Connection::open(PathBuf::from(DB_PATH)).unwrap();
+/// Create a wallet that is persisted to SQLite database.
+pub fn new_seed() -> Mnemonic {
+    // Create a new random number generator
+    let mut rng = thread_rng();
+    // Generate 256 bits of entropy
+    let entropy: [u8; 32] = rng.gen();
+    let words = Mnemonic::from_entropy(&entropy).unwrap();
+    // Create extended key to generate descriptors
+    words
+}
+
+pub fn from_words(name: &str, words: Mnemonic) -> PersistedWallet {
+    let path = String::from(DB_PATH) + name;
+    let mut db = Connection::open(PathBuf::from(path)).unwrap();
     let xkey: ExtendedKey = words.into_extended_key().unwrap();
     let xprv = xkey.into_xprv(Network::Testnet).unwrap();
     let wallet = Wallet::create(
