@@ -1,21 +1,15 @@
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 
-use bdk_wallet::bitcoin::Transaction;
-use bdk_wallet::LocalOutput;
-use bdk_wallet::{AddressInfo, Balance};
 use sidepanel::sidepanel;
 
+use crate::messages;
 use crate::wallet::WalletBackground;
-use crate::{bdk_utils, messages};
-
-const DEFAULT_WORDS: &str =
-    "rigid electric alert high ethics mystery pear reform alley height repeat manual";
 
 mod home;
 mod receive;
-mod send;
-mod settings;
+pub mod send;
+pub mod settings;
 mod sidepanel;
 mod splash;
 mod transactions;
@@ -30,13 +24,13 @@ pub struct WalletApp {
     /// State for Splash Screen
     pub splash: splash::SplashState,
     /// State for Home page
-    pub home: HomeState,
+    pub home: home::HomeState,
     /// State for Send page
-    pub send: SendState,
+    pub send: send::SendState,
     /// State for Receive page
-    pub receive: ReceiveState,
+    pub receive: receive::ReceiveState,
     /// State data for settings page
-    pub settings: Settings,
+    pub settings: settings::Settings,
     /// Channel for requests to the wallet thread
     pub wallet_req: Sender<messages::WalletRequest>,
     /// Channel for updates from the wallet thread
@@ -45,90 +39,13 @@ pub struct WalletApp {
 
 #[derive(Debug)]
 pub struct WalletInfo {
-    pub wallet_words: String,
     pub name: String,
 }
 
 impl WalletInfo {
     fn from_wallet() -> Self {
         Self {
-            wallet_words: DEFAULT_WORDS.into(),
             name: "test".into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct HomeState {
-    pub balance: Option<Balance>,
-    pub transactions: Vec<Transaction>,
-}
-
-impl HomeState {
-    fn new() -> Self {
-        HomeState {
-            balance: None,
-            transactions: Vec::new(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct SendState {
-    pub pay_to_addr: String,
-    pub label: String,
-    pub sats_amount: u64,
-    pub sats_entry: String,
-    pub selected_utxos: Vec<LocalOutput>,
-    pub fee_rate: f32,
-    pub fees: u64,
-}
-
-impl SendState {
-    pub fn new() -> Self {
-        SendState {
-            pay_to_addr: "".into(),
-            label: "".into(),
-            sats_amount: 0,
-            sats_entry: "".into(),
-            selected_utxos: Vec::new(),
-            fee_rate: 1.,
-            fees: 0,
-        }
-    }
-}
-
-pub struct ReceiveState {
-    pub pay_to_addr: String,
-    pub label: String,
-    pub derivation: String,
-    pub next_addr: Vec<AddressInfo>,
-}
-
-impl ReceiveState {
-    pub fn new() -> Self {
-        ReceiveState {
-            pay_to_addr: "".into(),
-            label: "".into(),
-            derivation: "".into(),
-            next_addr: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Settings {
-    pub electrum_url: String,
-    pub wallet_db: String,
-    pub new_wallet_seed: String,
-}
-
-impl Settings {
-    fn new() -> Self {
-        Self {
-            electrum_url: "ssl://electrum.blockstream.info:60002".into(),
-            wallet_db: "wallets".into(),
-            new_wallet_seed: DEFAULT_WORDS.into(),
         }
     }
 }
@@ -148,7 +65,7 @@ impl WalletApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-        let settings = Settings::new();
+        let settings = settings::Settings::new();
         let cl = settings.clone();
         let req: (
             Sender<messages::WalletRequest>,
@@ -170,9 +87,9 @@ impl WalletApp {
             debug: Vec::new(),
             wallet_info: WalletInfo::from_wallet(),
             splash: splash::SplashState::new(),
-            home: HomeState::new(),
-            send: SendState::new(),
-            receive: ReceiveState::new(),
+            home: home::HomeState::new(),
+            send: send::SendState::new(),
+            receive: receive::ReceiveState::new(),
             settings,
             wallet_req: req.0,
             wallet_updates: resp.1,

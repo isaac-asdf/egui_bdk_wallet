@@ -1,6 +1,6 @@
 use bdk_wallet::{bitcoin::Transaction, AddressInfo, Balance, LocalOutput, PersistedWallet};
 
-use crate::app::{SendState, Settings};
+use crate::app::{send::SendState, settings::Settings};
 
 pub struct AppConfig {
     pub wallets_loc: String,

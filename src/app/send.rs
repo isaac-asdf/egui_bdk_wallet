@@ -1,4 +1,30 @@
 use crate::WalletApp;
+use bdk_wallet::LocalOutput;
+
+#[derive(Clone, Debug)]
+pub struct SendState {
+    pub pay_to_addr: String,
+    pub label: String,
+    pub sats_amount: u64,
+    pub sats_entry: String,
+    pub selected_utxos: Vec<LocalOutput>,
+    pub fee_rate: f32,
+    pub fees: u64,
+}
+
+impl SendState {
+    pub fn new() -> Self {
+        SendState {
+            pay_to_addr: "".into(),
+            label: "".into(),
+            sats_amount: 0,
+            sats_entry: "".into(),
+            selected_utxos: Vec::new(),
+            fee_rate: 1.,
+            fees: 0,
+        }
+    }
+}
 
 pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     ui.heading("Transaction Builder");
