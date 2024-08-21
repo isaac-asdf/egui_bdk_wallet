@@ -16,45 +16,30 @@ use crate::{
 };
 
 pub struct WalletBackground {
-    wallet: PersistedWallet,
-    wallet_db: String,
-    electrum_url: String,
+    wallet: Option<WalletInfo>,
     pub wallet_req: Receiver<messages::WalletRequest>,
     pub wallet_updates: Sender<messages::WalletResponse>,
 }
 
+struct WalletInfo {
+    wallet: PersistedWallet,
+    wallet_db: String,
+    electrum_url: String,
+}
+
 impl WalletBackground {
     pub fn new(
-        config: AppConfig,
         req: Receiver<messages::WalletRequest>,
         resp: Sender<messages::WalletResponse>,
     ) -> Self {
-        let wallet = bdk_utils::from_changeset(&config.wallets_loc);
-        let wallet = match wallet {
-            Ok(w) => w,
-            Err(_) => bdk_utils::create_new("test").0,
-        };
         WalletBackground {
-            wallet,
-            wallet_db: config.wallets_loc,
-            electrum_url: config.electrum_url,
+            wallet: None,
             wallet_req: req,
             wallet_updates: resp,
         }
     }
 
     pub fn monitor_wallet(&mut self) {
-        self.wallet_updates
-            .send(WalletResponse::Sync(self.wallet.balance()))
-            .expect("main stopped");
-
-        self.wallet_updates
-            .send(WalletResponse::RecvAddresses(vec![self
-                .wallet
-                .reveal_next_address(bdk_wallet::KeychainKind::External)]))
-            .unwrap();
-
-        let mut b_ons = true;
         loop {
             thread::sleep(Duration::from_millis(500));
             let req = self.wallet_req.try_recv();
@@ -68,13 +53,6 @@ impl WalletBackground {
                     WalletRequest::CreateTransaction(tx) => self.create_tx(tx),
                 };
             };
-
-            if b_ons {
-                b_ons = false;
-                let utxos = self.wallet.list_unspent();
-                let utxos = utxos.collect();
-                let _ = self.wallet_updates.send(WalletResponse::UtxoList(utxos));
-            }
         }
     }
 
@@ -90,18 +68,25 @@ impl WalletBackground {
         let script_pubkey = ScriptBuf::new_p2wpkh(&wpkh);
         let _tx = self
             .wallet
+            .as_mut()
+            .unwrap()
+            .wallet
             .build_tx()
             .fee_rate(FeeRate::from_sat_per_vb(5_u64).unwrap())
             .add_recipient(script_pubkey, Amount::from_sat(tx.sats_amount));
     }
 
     fn handle_config(&mut self, c: AppConfig) {
-        self.wallet_db = c.wallets_loc;
-        self.electrum_url = c.electrum_url;
+        // self.wallet_db = c.wallets_loc;
+        // self.electrum_url = c.electrum_url;
     }
 
     fn handle_new_wallet(&mut self, w: PersistedWallet) {
-        self.wallet = w;
+        self.wallet = Some(WalletInfo {
+            wallet: w,
+            wallet_db: "".into(),
+            electrum_url: "".into(),
+        });
         self.wallet_updates
             .send(WalletResponse::WalletReady)
             .unwrap();
@@ -113,15 +98,17 @@ impl WalletBackground {
             .send(WalletResponse::Debug("Starting sync".into()))
             .unwrap();
 
+        let refw = self.wallet.as_mut().unwrap();
+
         // request new state
-        let cps: Vec<_> = self.wallet.checkpoints().collect();
-        let cp = self.wallet.latest_checkpoint();
+        let cps: Vec<_> = refw.wallet.checkpoints().collect();
+        let cp = refw.wallet.latest_checkpoint();
         let bal: Balance = if cps.len() > 1 {
             // short synce
-            bdk_utils::cp_sync(cp, &self.wallet_db, &mut self.wallet)
+            bdk_utils::cp_sync(cp, &refw.wallet_db, &mut refw.wallet)
         } else {
             // full synce
-            bdk_utils::full_scan(&self.wallet_db, &mut self.wallet)
+            bdk_utils::full_scan(&refw.wallet_db, &mut refw.wallet)
         };
 
         // send balance to UI thread

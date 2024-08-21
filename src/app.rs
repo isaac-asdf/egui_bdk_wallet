@@ -65,8 +65,6 @@ impl WalletApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-        let settings = settings::Settings::new();
-        let cl = settings.clone();
         let req: (
             Sender<messages::WalletRequest>,
             Receiver<messages::WalletRequest>,
@@ -78,7 +76,7 @@ impl WalletApp {
         std::thread::spawn(move || {
             let recv = req.1;
             let send = resp.0;
-            let mut bg = WalletBackground::new(cl.into(), recv, send);
+            let mut bg = WalletBackground::new(recv, send);
             bg.monitor_wallet();
         });
 
@@ -90,7 +88,7 @@ impl WalletApp {
             home: home::HomeState::new(),
             send: send::SendState::new(),
             receive: receive::ReceiveState::new(),
-            settings,
+            settings: settings::Settings::new(),
             wallet_req: req.0,
             wallet_updates: resp.1,
         }
