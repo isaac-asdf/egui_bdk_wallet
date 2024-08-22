@@ -7,6 +7,11 @@ pub struct AppConfig {
     pub electrum_url: String,
 }
 
+pub struct CreatedWallet {
+    pub wallet: PersistedWallet,
+    pub name: String,
+}
+
 impl From<Settings> for AppConfig {
     fn from(value: Settings) -> Self {
         Self {
@@ -40,7 +45,7 @@ impl From<SendState> for TxParts {
 pub enum WalletRequest {
     Debug(String),
     Sync,
-    CreateNew(PersistedWallet),
+    CreateNew(CreatedWallet),
     AppConfig(AppConfig),
     CreateTransaction(TxParts),
     SendTransaction(Transaction),

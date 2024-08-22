@@ -32,8 +32,8 @@ pub fn list_wallets() -> Vec<String> {
         .collect()
 }
 
-pub fn from_changeset(_db: &str) -> Result<Persisted<Wallet>, bool> {
-    let path = String::from(DB_PATH) + "test.db";
+pub fn from_changeset(db: &str) -> Result<Persisted<Wallet>, bool> {
+    let path = String::from(DB_PATH) + db;
     let mut db = Connection::open(PathBuf::from(path)).unwrap();
     let wallet = Wallet::load().load_wallet(&mut db);
     match wallet {
@@ -96,7 +96,7 @@ pub fn cp_sync(_cp: CheckPoint, _db_path: &str, wallet: &mut PersistedWallet) ->
     wallet.balance()
 }
 
-pub fn full_scan(_db_path: &str, wallet: &mut PersistedWallet) -> Balance {
+pub fn full_scan(db_path: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );
@@ -115,7 +115,7 @@ pub fn full_scan(_db_path: &str, wallet: &mut PersistedWallet) -> Balance {
     let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
     wallet.apply_update(update).unwrap();
-    persist(wallet);
+    wallet.persist(db_path);
     let balance = wallet.balance();
     balance
 }

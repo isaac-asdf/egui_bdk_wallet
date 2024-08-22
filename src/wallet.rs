@@ -12,7 +12,7 @@ use bdk_wallet::{
 
 use crate::{
     bdk_utils,
-    messages::{self, AppConfig, TxParts, WalletRequest, WalletResponse},
+    messages::{self, AppConfig, CreatedWallet, TxParts, WalletRequest, WalletResponse},
 };
 
 pub struct WalletBackground {
@@ -24,7 +24,6 @@ pub struct WalletBackground {
 struct WalletInfo {
     wallet: PersistedWallet,
     wallet_db: String,
-    electrum_url: String,
 }
 
 impl WalletBackground {
@@ -81,11 +80,10 @@ impl WalletBackground {
         // self.electrum_url = c.electrum_url;
     }
 
-    fn handle_new_wallet(&mut self, w: PersistedWallet) {
+    fn handle_new_wallet(&mut self, w: CreatedWallet) {
         self.wallet = Some(WalletInfo {
-            wallet: w,
-            wallet_db: "".into(),
-            electrum_url: "".into(),
+            wallet: w.wallet,
+            wallet_db: w.name,
         });
         self.wallet_updates
             .send(WalletResponse::WalletReady)
@@ -99,6 +97,7 @@ impl WalletBackground {
             .unwrap();
 
         let refw = self.wallet.as_mut().unwrap();
+        println!("got wallet");
 
         // request new state
         let cps: Vec<_> = refw.wallet.checkpoints().collect();

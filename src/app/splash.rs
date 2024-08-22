@@ -1,8 +1,7 @@
 use bdk_wallet::bip39::Mnemonic;
-use bdk_wallet::keys::DerivableKey;
-use bdk_wallet::PersistedWallet;
 
 use crate::bdk_utils;
+use crate::messages::CreatedWallet;
 use crate::{messages::WalletRequest, WalletApp};
 
 #[derive(Debug)]
@@ -51,6 +50,22 @@ pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
                 ui.selectable_value(&mut app_state.splash.selected_wallet, w.to_string(), w);
             })
         });
+    if &app_state.splash.selected_wallet != "" && &app_state.splash.selected_wallet != NEW_NAME {
+        if ui.button("Load current wallet").clicked() {
+            // load wallet and send to backend on click
+            let wallet = bdk_utils::from_changeset(&app_state.splash.selected_wallet);
+            if let Ok(wallet) = wallet {
+                let wallet = CreatedWallet {
+                    wallet,
+                    name: app_state.splash.new_name.clone(),
+                };
+                app_state
+                    .wallet_req
+                    .send(WalletRequest::CreateNew(wallet))
+                    .unwrap();
+            }
+        }
+    }
 
     if &app_state.splash.selected_wallet == NEW_NAME {
         ui.heading("New wallet options:");
@@ -107,6 +122,10 @@ fn seed_opt(app_state: &mut WalletApp, ui: &mut egui::Ui) {
 
 fn finalize_wallet(state: &mut WalletApp, mne: Mnemonic) {
     let wallet = bdk_utils::from_words(&state.splash.new_name, mne);
+    let wallet = CreatedWallet {
+        wallet,
+        name: state.splash.new_name.clone(),
+    };
     state
         .wallet_req
         .send(WalletRequest::CreateNew(wallet))
