@@ -88,9 +88,21 @@ impl WalletBackground {
         self.wallet_updates
             .send(WalletResponse::WalletReady)
             .unwrap();
-        let balance = self.wallet.as_mut().unwrap().wallet.balance();
+        let wallet = self.wallet.as_mut().unwrap().wallet;
+        let balance = wallet.balance();
         self.wallet_updates
             .send(WalletResponse::Sync(balance))
+            .unwrap();
+    }
+
+    fn get_unused_addrs(&mut self) {
+        let wallet = self.wallet.as_mut().unwrap().wallet;
+        let revealed = wallet
+            .list_unused_addresses(bdk_wallet::KeychainKind::External)
+            .collect();
+        let addrs = vec![wallet.reveal_next_address(bdk_wallet::KeychainKind::External)];
+        self.wallet_updates
+            .send(WalletResponse::RecvAddresses(revealed))
             .unwrap();
     }
 
