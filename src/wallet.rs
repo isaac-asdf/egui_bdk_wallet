@@ -88,6 +88,10 @@ impl WalletBackground {
         self.wallet_updates
             .send(WalletResponse::WalletReady)
             .unwrap();
+        let balance = self.wallet.as_mut().unwrap().wallet.balance();
+        self.wallet_updates
+            .send(WalletResponse::Sync(balance))
+            .unwrap();
     }
 
     fn handle_sync(&mut self) {
@@ -97,7 +101,6 @@ impl WalletBackground {
             .unwrap();
 
         let refw = self.wallet.as_mut().unwrap();
-        println!("got wallet");
 
         // request new state
         let cps: Vec<_> = refw.wallet.checkpoints().collect();

@@ -83,7 +83,7 @@ pub fn from_words(name: &str, words: Mnemonic) -> PersistedWallet {
     wallet
 }
 
-pub fn cp_sync(_cp: CheckPoint, _db_path: &str, wallet: &mut PersistedWallet) -> Balance {
+pub fn cp_sync(_cp: CheckPoint, name: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );
@@ -91,19 +91,18 @@ pub fn cp_sync(_cp: CheckPoint, _db_path: &str, wallet: &mut PersistedWallet) ->
     let update = client.sync(sync_request, BATCH_SIZE, true).unwrap();
 
     // Apply the update to the wallet
+    let path = String::from(DB_PATH) + name;
+    let mut db = Connection::open(PathBuf::from(path)).unwrap();
     wallet.apply_update(update).unwrap();
-    persist(wallet);
-    wallet.balance()
+    wallet.persist(&mut db).expect("persist error");
+    let balance = wallet.balance();
+    balance
 }
 
-pub fn full_scan(db_path: &str, wallet: &mut PersistedWallet) -> Balance {
+pub fn full_scan(name: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );
-
-    // Populate the electrum client's transaction cache so it doesn't redownload transaction we
-    // already have.
-    // client.populate_tx_cache(&wallet);
 
     // Perform the initial full scan on the wallet
     let full_scan_request = wallet.start_full_scan();
@@ -115,7 +114,9 @@ pub fn full_scan(db_path: &str, wallet: &mut PersistedWallet) -> Balance {
     let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
     wallet.apply_update(update).unwrap();
-    wallet.persist(db_path);
+    let path = String::from(DB_PATH) + name;
+    let mut db = Connection::open(PathBuf::from(path)).unwrap();
+    wallet.persist(&mut db).expect("persist error");
     let balance = wallet.balance();
     balance
 }

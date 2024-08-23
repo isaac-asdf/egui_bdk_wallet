@@ -57,7 +57,7 @@ pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
             if let Ok(wallet) = wallet {
                 let wallet = CreatedWallet {
                     wallet,
-                    name: app_state.splash.new_name.clone(),
+                    name: app_state.splash.selected_wallet.clone(),
                 };
                 app_state
                     .wallet_req
