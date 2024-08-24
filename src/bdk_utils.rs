@@ -3,7 +3,7 @@ use bdk_wallet::{
         key::rand::{thread_rng, Rng},
         Network,
     },
-    chain::{local_chain::CheckPoint, Persisted},
+    chain::Persisted,
     keys::{bip39::Mnemonic, DerivableKey, ExtendedKey},
     template::Bip84,
     Balance, KeychainKind, PersistedWallet, Wallet,
@@ -46,17 +46,6 @@ pub fn from_changeset(db: &str) -> Result<Persisted<Wallet>, bool> {
 }
 
 /// Create a wallet that is persisted to SQLite database.
-pub fn create_new(name: &str) -> (PersistedWallet, Mnemonic) {
-    // Create a new random number generator
-    let mut rng = thread_rng();
-    // Generate 256 bits of entropy
-    let entropy: [u8; 32] = rng.gen();
-    let words = Mnemonic::from_entropy(&entropy).unwrap();
-    // Create extended key to generate descriptors
-    (from_words(name, words.clone()), words)
-}
-
-/// Create a wallet that is persisted to SQLite database.
 pub fn new_seed() -> Mnemonic {
     // Create a new random number generator
     let mut rng = thread_rng();
@@ -91,10 +80,8 @@ pub fn cp_sync(name: &str, wallet: &mut PersistedWallet) -> Balance {
     let update = client.sync(sync_request, BATCH_SIZE, true).unwrap();
 
     // Apply the update to the wallet
-    let path = String::from(DB_PATH) + name;
-    let mut db = Connection::open(PathBuf::from(path)).unwrap();
     wallet.apply_update(update).unwrap();
-    wallet.persist(&mut db).expect("persist error");
+    persist(name, wallet);
     let balance = wallet.balance();
     balance
 }
@@ -114,14 +101,13 @@ pub fn full_scan(name: &str, wallet: &mut PersistedWallet) -> Balance {
     let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
     wallet.apply_update(update).unwrap();
-    let path = String::from(DB_PATH) + name;
-    let mut db = Connection::open(PathBuf::from(path)).unwrap();
-    wallet.persist(&mut db).expect("persist error");
+    persist(name, wallet);
     let balance = wallet.balance();
     balance
 }
 
-fn persist(wallet: &mut PersistedWallet) {
-    let mut db = Connection::open(PathBuf::from(DB_PATH)).unwrap();
-    wallet.persist(&mut db).unwrap();
+fn persist(name: &str, wallet: &mut PersistedWallet) {
+    let path = String::from(DB_PATH) + name;
+    let mut db = Connection::open(PathBuf::from(path)).unwrap();
+    wallet.persist(&mut db).expect("persist error");
 }

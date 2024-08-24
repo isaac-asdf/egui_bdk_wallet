@@ -36,6 +36,7 @@ impl WalletBackground {
 
     pub fn monitor_wallet(&mut self) {
         self.get_balance();
+        self.get_unused_addrs();
         self.wallet_updates
             .send(messages::WalletResponse::WalletReady)
             .unwrap();
@@ -49,9 +50,11 @@ impl WalletBackground {
                     WalletRequest::AppConfig(c) => self.handle_config(c),
                     WalletRequest::SendTransaction(tx) => self.send_tx(tx),
                     WalletRequest::CreateTransaction(tx) => self.create_tx(tx),
+                    WalletRequest::Close => break,
                 };
             };
         }
+        println!("Closing wallet");
     }
 
     fn send_tx(&mut self, _tx: Transaction) {
@@ -71,7 +74,7 @@ impl WalletBackground {
             .add_recipient(script_pubkey, Amount::from_sat(tx.sats_amount));
     }
 
-    fn handle_config(&mut self, c: AppConfig) {
+    fn handle_config(&mut self, _c: AppConfig) {
         // self.wallet_db = c.wallets_loc;
         // self.electrum_url = c.electrum_url;
     }

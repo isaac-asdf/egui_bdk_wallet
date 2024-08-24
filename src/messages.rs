@@ -48,6 +48,7 @@ pub enum WalletRequest {
     AppConfig(AppConfig),
     CreateTransaction(TxParts),
     SendTransaction(Transaction),
+    Close,
 }
 
 // pub struct WalletResponse {

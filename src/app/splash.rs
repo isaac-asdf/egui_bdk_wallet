@@ -2,7 +2,7 @@ use bdk_wallet::bip39::Mnemonic;
 
 use crate::bdk_utils;
 use crate::messages::CreatedWallet;
-use crate::{messages::WalletRequest, WalletApp};
+use crate::WalletApp;
 
 #[derive(Debug)]
 pub struct SplashState {

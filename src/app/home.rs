@@ -28,4 +28,9 @@ pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
     }
 
     ui.label(format!("{:?}", app_state.home.balance));
+
+    ui.heading("Transaction History");
+    app_state.home.transactions.iter().for_each(|t| {
+        ui.label(format!("{:?}", t));
+    });
 }

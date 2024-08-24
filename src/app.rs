@@ -33,7 +33,9 @@ pub struct WalletApp {
     pub wallet_req: Sender<messages::WalletRequest>,
     /// Channel for updates from the wallet thread
     pub wallet_updates: Receiver<messages::WalletResponse>,
+    /// For cloning and sending to background worker thread
     for_bg_req: Receiver<messages::WalletRequest>,
+    /// For cloning and sending to background worker thread
     for_bg_upd: Sender<messages::WalletResponse>,
 }
 
@@ -108,8 +110,7 @@ impl eframe::App for WalletApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
+        // check for updates from background thread to update wallet state
         let update = self.wallet_updates.try_recv();
         if let Ok(update) = update {
             // update state
@@ -127,9 +128,9 @@ impl eframe::App for WalletApp {
             }
         }
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
+        // Draw app
 
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 // NOTE: no File->Quit on web pages!
                 let is_web = cfg!(target_arch = "wasm32");
@@ -137,6 +138,11 @@ impl eframe::App for WalletApp {
                     ui.menu_button("File", |ui| {
                         if ui.button("Quit").clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        if ui.button("Change Wallet").clicked() {
+                            let _ = self.wallet_req.send(messages::WalletRequest::Close);
+                            self.page = Page::SplashScreen;
+                            self.splash = splash::SplashState::new();
                         }
                     });
                     ui.add_space(16.0);
