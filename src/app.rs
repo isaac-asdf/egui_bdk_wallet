@@ -1,9 +1,7 @@
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
-
+use flume::{Receiver, Sender};
 use sidepanel::sidepanel;
 
-use crate::messages;
+use crate::messages::{self, CreatedWallet};
 use crate::wallet::WalletBackground;
 
 mod home;
@@ -35,6 +33,8 @@ pub struct WalletApp {
     pub wallet_req: Sender<messages::WalletRequest>,
     /// Channel for updates from the wallet thread
     pub wallet_updates: Receiver<messages::WalletResponse>,
+    for_bg_req: Receiver<messages::WalletRequest>,
+    for_bg_upd: Sender<messages::WalletResponse>,
 }
 
 #[derive(Debug)]
@@ -61,6 +61,15 @@ pub enum Page {
 }
 
 impl WalletApp {
+    pub fn new_bg(&self, wallet: CreatedWallet) {
+        let recv = self.for_bg_req.clone();
+        let send = self.for_bg_upd.clone();
+        std::thread::spawn(move || {
+            let mut bg = WalletBackground::new(wallet.wallet, wallet.name, recv, send);
+            bg.monitor_wallet();
+        });
+    }
+
     /// Called once before the first frame.
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -68,17 +77,11 @@ impl WalletApp {
         let req: (
             Sender<messages::WalletRequest>,
             Receiver<messages::WalletRequest>,
-        ) = mpsc::channel();
+        ) = flume::unbounded();
         let resp: (
             Sender<messages::WalletResponse>,
             Receiver<messages::WalletResponse>,
-        ) = mpsc::channel();
-        std::thread::spawn(move || {
-            let recv = req.1;
-            let send = resp.0;
-            let mut bg = WalletBackground::new(recv, send);
-            bg.monitor_wallet();
-        });
+        ) = flume::unbounded();
 
         WalletApp {
             page: Page::SplashScreen,
@@ -91,6 +94,8 @@ impl WalletApp {
             settings: settings::Settings::new(),
             wallet_req: req.0,
             wallet_updates: resp.1,
+            for_bg_req: req.1,
+            for_bg_upd: resp.0,
         }
     }
 }

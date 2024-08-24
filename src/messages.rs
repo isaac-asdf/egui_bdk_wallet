@@ -45,7 +45,6 @@ impl From<SendState> for TxParts {
 pub enum WalletRequest {
     Debug(String),
     Sync,
-    CreateNew(CreatedWallet),
     AppConfig(AppConfig),
     CreateTransaction(TxParts),
     SendTransaction(Transaction),

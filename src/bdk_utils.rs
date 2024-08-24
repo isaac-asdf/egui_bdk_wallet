@@ -83,7 +83,7 @@ pub fn from_words(name: &str, words: Mnemonic) -> PersistedWallet {
     wallet
 }
 
-pub fn cp_sync(_cp: CheckPoint, name: &str, wallet: &mut PersistedWallet) -> Balance {
+pub fn cp_sync(name: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );

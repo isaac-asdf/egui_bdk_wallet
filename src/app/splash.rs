@@ -59,10 +59,7 @@ pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
                     wallet,
                     name: app_state.splash.selected_wallet.clone(),
                 };
-                app_state
-                    .wallet_req
-                    .send(WalletRequest::CreateNew(wallet))
-                    .unwrap();
+                app_state.new_bg(wallet);
             }
         }
     }
@@ -126,10 +123,7 @@ fn finalize_wallet(state: &mut WalletApp, mne: Mnemonic) {
         wallet,
         name: state.splash.new_name.clone(),
     };
-    state
-        .wallet_req
-        .send(WalletRequest::CreateNew(wallet))
-        .unwrap();
+    state.new_bg(wallet);
 }
 
 fn xpub_opt(app_state: &mut WalletApp, ui: &mut egui::Ui) {
