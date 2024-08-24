@@ -1,10 +1,15 @@
 use bdk_wallet::{bitcoin::Transaction, AddressInfo, Balance, LocalOutput, PersistedWallet};
 
-use crate::app::{SendState, Settings};
+use crate::app::{send::SendState, settings::Settings};
 
 pub struct AppConfig {
     pub wallets_loc: String,
     pub electrum_url: String,
+}
+
+pub struct CreatedWallet {
+    pub wallet: PersistedWallet,
+    pub name: String,
 }
 
 impl From<Settings> for AppConfig {
@@ -40,16 +45,17 @@ impl From<SendState> for TxParts {
 pub enum WalletRequest {
     Debug(String),
     Sync,
-    CreateNew(PersistedWallet),
     AppConfig(AppConfig),
     CreateTransaction(TxParts),
     SendTransaction(Transaction),
+    Close,
 }
 
 // pub struct WalletResponse {
 //     pub status: i32,
 // }
 pub enum WalletResponse {
+    WalletReady,
     Debug(String),
     Sync(Balance),
     RecvAddresses(Vec<AddressInfo>),

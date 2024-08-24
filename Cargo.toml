@@ -26,6 +26,7 @@ bdk_wallet = { version = "1.0.0-beta.1", features = ["keys-bip39", "rusqlite"] }
 bdk_file_store = "0.14.0"
 bdk_sqlite = "0.2.0"
 bdk_electrum = "0.16.0"
+flume = "0.11.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -1,21 +1,13 @@
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
-
-use bdk_wallet::bitcoin::Transaction;
-use bdk_wallet::LocalOutput;
-use bdk_wallet::{AddressInfo, Balance};
+use flume::{Receiver, Sender};
 use sidepanel::sidepanel;
 
+use crate::messages::{self, CreatedWallet};
 use crate::wallet::WalletBackground;
-use crate::{bdk_utils, messages};
-
-const DEFAULT_WORDS: &str =
-    "rigid electric alert high ethics mystery pear reform alley height repeat manual";
 
 mod home;
 mod receive;
-mod send;
-mod settings;
+pub mod send;
+pub mod settings;
 mod sidepanel;
 mod splash;
 mod transactions;
@@ -28,137 +20,34 @@ pub struct WalletApp {
     /// UI display for wallet info
     pub wallet_info: WalletInfo,
     /// State for Splash Screen
-    pub splash: SplashState,
+    pub splash: splash::SplashState,
     /// State for Home page
-    pub home: HomeState,
+    pub home: home::HomeState,
     /// State for Send page
-    pub send: SendState,
+    pub send: send::SendState,
     /// State for Receive page
-    pub receive: ReceiveState,
+    pub receive: receive::ReceiveState,
     /// State data for settings page
-    pub settings: Settings,
+    pub settings: settings::Settings,
     /// Channel for requests to the wallet thread
     pub wallet_req: Sender<messages::WalletRequest>,
     /// Channel for updates from the wallet thread
     pub wallet_updates: Receiver<messages::WalletResponse>,
+    /// For cloning and sending to background worker thread
+    for_bg_req: Receiver<messages::WalletRequest>,
+    /// For cloning and sending to background worker thread
+    for_bg_upd: Sender<messages::WalletResponse>,
 }
 
 #[derive(Debug)]
 pub struct WalletInfo {
-    pub wallet_words: String,
     pub name: String,
 }
 
 impl WalletInfo {
     fn from_wallet() -> Self {
         Self {
-            wallet_words: DEFAULT_WORDS.into(),
             name: "test".into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SplashState {
-    pub selected_wallet: String,
-    pub wallets: Vec<String>,
-    pub new_name: String,
-    pub new_1: String,
-    pub new_2: String,
-    pub new_option: NewWallet,
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum NewWallet {
-    Seed,
-    Xpub,
-    Descriptor,
-}
-
-impl SplashState {
-    pub fn new() -> Self {
-        SplashState {
-            selected_wallet: String::new(),
-            wallets: bdk_utils::list_wallets(),
-            new_name: String::new(),
-            new_1: String::new(),
-            new_2: String::new(),
-            new_option: NewWallet::Seed,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct HomeState {
-    pub balance: Option<Balance>,
-    pub transactions: Vec<Transaction>,
-}
-
-impl HomeState {
-    fn new() -> Self {
-        HomeState {
-            balance: None,
-            transactions: Vec::new(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct SendState {
-    pub pay_to_addr: String,
-    pub label: String,
-    pub sats_amount: u64,
-    pub sats_entry: String,
-    pub selected_utxos: Vec<LocalOutput>,
-    pub fee_rate: f32,
-    pub fees: u64,
-}
-
-impl SendState {
-    pub fn new() -> Self {
-        SendState {
-            pay_to_addr: "".into(),
-            label: "".into(),
-            sats_amount: 0,
-            sats_entry: "".into(),
-            selected_utxos: Vec::new(),
-            fee_rate: 1.,
-            fees: 0,
-        }
-    }
-}
-
-pub struct ReceiveState {
-    pub pay_to_addr: String,
-    pub label: String,
-    pub derivation: String,
-    pub next_addr: Vec<AddressInfo>,
-}
-
-impl ReceiveState {
-    pub fn new() -> Self {
-        ReceiveState {
-            pay_to_addr: "".into(),
-            label: "".into(),
-            derivation: "".into(),
-            next_addr: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Settings {
-    pub electrum_url: String,
-    pub wallet_db: String,
-    pub new_wallet_seed: String,
-}
-
-impl Settings {
-    fn new() -> Self {
-        Self {
-            electrum_url: "ssl://electrum.blockstream.info:60002".into(),
-            wallet_db: "wallets".into(),
-            new_wallet_seed: DEFAULT_WORDS.into(),
         }
     }
 }
@@ -174,38 +63,41 @@ pub enum Page {
 }
 
 impl WalletApp {
+    pub fn new_bg(&self, wallet: CreatedWallet) {
+        let recv = self.for_bg_req.clone();
+        let send = self.for_bg_upd.clone();
+        std::thread::spawn(move || {
+            let mut bg = WalletBackground::new(wallet.wallet, wallet.name, recv, send);
+            bg.monitor_wallet();
+        });
+    }
+
     /// Called once before the first frame.
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-        let settings = Settings::new();
-        let cl = settings.clone();
         let req: (
             Sender<messages::WalletRequest>,
             Receiver<messages::WalletRequest>,
-        ) = mpsc::channel();
+        ) = flume::unbounded();
         let resp: (
             Sender<messages::WalletResponse>,
             Receiver<messages::WalletResponse>,
-        ) = mpsc::channel();
-        std::thread::spawn(move || {
-            let recv = req.1;
-            let send = resp.0;
-            let mut bg = WalletBackground::new(cl.into(), recv, send);
-            bg.monitor_wallet();
-        });
+        ) = flume::unbounded();
 
         WalletApp {
             page: Page::SplashScreen,
             debug: Vec::new(),
             wallet_info: WalletInfo::from_wallet(),
-            splash: SplashState::new(),
-            home: HomeState::new(),
-            send: SendState::new(),
-            receive: ReceiveState::new(),
-            settings,
+            splash: splash::SplashState::new(),
+            home: home::HomeState::new(),
+            send: send::SendState::new(),
+            receive: receive::ReceiveState::new(),
+            settings: settings::Settings::new(),
             wallet_req: req.0,
             wallet_updates: resp.1,
+            for_bg_req: req.1,
+            for_bg_upd: resp.0,
         }
     }
 }
@@ -218,8 +110,7 @@ impl eframe::App for WalletApp {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
+        // check for updates from background thread to update wallet state
         let update = self.wallet_updates.try_recv();
         if let Ok(update) = update {
             // update state
@@ -233,12 +124,13 @@ impl eframe::App for WalletApp {
                 messages::WalletResponse::Sync(b) => self.home.balance = Some(b),
                 messages::WalletResponse::UtxoList(utxos) => self.send.selected_utxos = utxos,
                 messages::WalletResponse::RecvAddresses(addrs) => self.receive.next_addr = addrs,
+                messages::WalletResponse::WalletReady => self.page = Page::Home,
             }
         }
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
+        // Draw app
 
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 // NOTE: no File->Quit on web pages!
                 let is_web = cfg!(target_arch = "wasm32");
@@ -246,6 +138,11 @@ impl eframe::App for WalletApp {
                     ui.menu_button("File", |ui| {
                         if ui.button("Quit").clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        if ui.button("Change Wallet").clicked() {
+                            let _ = self.wallet_req.send(messages::WalletRequest::Close);
+                            self.page = Page::SplashScreen;
+                            self.splash = splash::SplashState::new();
                         }
                     });
                     ui.add_space(16.0);

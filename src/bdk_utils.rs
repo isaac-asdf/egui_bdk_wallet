@@ -3,7 +3,7 @@ use bdk_wallet::{
         key::rand::{thread_rng, Rng},
         Network,
     },
-    chain::{local_chain::CheckPoint, Persisted},
+    chain::Persisted,
     keys::{bip39::Mnemonic, DerivableKey, ExtendedKey},
     template::Bip84,
     Balance, KeychainKind, PersistedWallet, Wallet,
@@ -32,8 +32,8 @@ pub fn list_wallets() -> Vec<String> {
         .collect()
 }
 
-pub fn from_changeset(_db: &str) -> Result<Persisted<Wallet>, bool> {
-    let path = String::from(DB_PATH) + "test.db";
+pub fn from_changeset(db: &str) -> Result<Persisted<Wallet>, bool> {
+    let path = String::from(DB_PATH) + db;
     let mut db = Connection::open(PathBuf::from(path)).unwrap();
     let wallet = Wallet::load().load_wallet(&mut db);
     match wallet {
@@ -46,18 +46,19 @@ pub fn from_changeset(_db: &str) -> Result<Persisted<Wallet>, bool> {
 }
 
 /// Create a wallet that is persisted to SQLite database.
-pub fn create_new() -> (PersistedWallet, Mnemonic) {
+pub fn new_seed() -> Mnemonic {
     // Create a new random number generator
     let mut rng = thread_rng();
     // Generate 256 bits of entropy
     let entropy: [u8; 32] = rng.gen();
     let words = Mnemonic::from_entropy(&entropy).unwrap();
     // Create extended key to generate descriptors
-    (from_words(words.clone()), words)
+    words
 }
 
-pub fn from_words(words: Mnemonic) -> PersistedWallet {
-    let mut db = Connection::open(PathBuf::from(DB_PATH)).unwrap();
+pub fn from_words(name: &str, words: Mnemonic) -> PersistedWallet {
+    let path = String::from(DB_PATH) + name;
+    let mut db = Connection::open(PathBuf::from(path)).unwrap();
     let xkey: ExtendedKey = words.into_extended_key().unwrap();
     let xprv = xkey.into_xprv(Network::Testnet).unwrap();
     let wallet = Wallet::create(
@@ -71,7 +72,7 @@ pub fn from_words(words: Mnemonic) -> PersistedWallet {
     wallet
 }
 
-pub fn cp_sync(_cp: CheckPoint, _db_path: &str, wallet: &mut PersistedWallet) -> Balance {
+pub fn cp_sync(name: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );
@@ -80,18 +81,15 @@ pub fn cp_sync(_cp: CheckPoint, _db_path: &str, wallet: &mut PersistedWallet) ->
 
     // Apply the update to the wallet
     wallet.apply_update(update).unwrap();
-    persist(wallet);
-    wallet.balance()
+    persist(name, wallet);
+    let balance = wallet.balance();
+    balance
 }
 
-pub fn full_scan(_db_path: &str, wallet: &mut PersistedWallet) -> Balance {
+pub fn full_scan(name: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );
-
-    // Populate the electrum client's transaction cache so it doesn't redownload transaction we
-    // already have.
-    // client.populate_tx_cache(&wallet);
 
     // Perform the initial full scan on the wallet
     let full_scan_request = wallet.start_full_scan();
@@ -103,12 +101,13 @@ pub fn full_scan(_db_path: &str, wallet: &mut PersistedWallet) -> Balance {
     let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
     wallet.apply_update(update).unwrap();
-    persist(wallet);
+    persist(name, wallet);
     let balance = wallet.balance();
     balance
 }
 
-fn persist(wallet: &mut PersistedWallet) {
-    let mut db = Connection::open(PathBuf::from(DB_PATH)).unwrap();
-    wallet.persist(&mut db).unwrap();
+fn persist(name: &str, wallet: &mut PersistedWallet) {
+    let path = String::from(DB_PATH) + name;
+    let mut db = Connection::open(PathBuf::from(path)).unwrap();
+    wallet.persist(&mut db).expect("persist error");
 }
