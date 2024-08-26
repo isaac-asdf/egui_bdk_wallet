@@ -22,10 +22,10 @@ pub enum NewWallet {
 }
 
 impl SplashState {
-    pub fn new() -> Self {
+    pub fn new(db: &str) -> Self {
         SplashState {
             selected_wallet: String::new(),
-            wallets: bdk_utils::list_wallets(),
+            wallets: bdk_utils::list_wallets(db),
             new_name: String::new(),
             new_1: String::new(),
             new_2: String::new(),
@@ -50,16 +50,22 @@ pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
                 ui.selectable_value(&mut app_state.splash.selected_wallet, w.to_string(), w);
             })
         });
+    ui.add_space(20.);
     if &app_state.splash.selected_wallet != "" && &app_state.splash.selected_wallet != NEW_NAME {
-        if ui.button("Load current wallet").clicked() {
+        if ui.button("Load wallet").clicked() {
             // load wallet and send to backend on click
-            let wallet = bdk_utils::from_changeset(&app_state.splash.selected_wallet);
+            let wallet = bdk_utils::from_changeset(
+                &app_state.settings.wallet_db,
+                &app_state.splash.selected_wallet,
+            );
             if let Ok(wallet) = wallet {
                 let wallet = CreatedWallet {
                     wallet,
                     name: app_state.splash.selected_wallet.clone(),
                 };
                 app_state.new_bg(wallet);
+            } else {
+                println!("Load failed");
             }
         }
     }
@@ -118,7 +124,7 @@ fn seed_opt(app_state: &mut WalletApp, ui: &mut egui::Ui) {
 }
 
 fn finalize_wallet(state: &mut WalletApp, mne: Mnemonic) {
-    let wallet = bdk_utils::from_words(&state.splash.new_name, mne);
+    let wallet = bdk_utils::from_words(&state.settings.wallet_db, &state.splash.new_name, mne);
     let wallet = CreatedWallet {
         wallet,
         name: state.splash.new_name.clone(),
