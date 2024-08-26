@@ -14,13 +14,11 @@ use bdk_electrum::BdkElectrumClient;
 use bdk_wallet::rusqlite::Connection;
 use std::path::PathBuf;
 
-const DB_PATH: &str = "/home/isaac/Desktop/wallets/";
-
 const STOP_GAP: usize = 50;
 const BATCH_SIZE: usize = 5;
 
-pub fn list_wallets() -> Vec<String> {
-    let files = std::fs::read_dir(DB_PATH).unwrap();
+pub fn list_wallets(db_path: &str) -> Vec<String> {
+    let files = std::fs::read_dir(db_path).unwrap();
     files
         .into_iter()
         .filter_map(|f| {
@@ -32,9 +30,10 @@ pub fn list_wallets() -> Vec<String> {
         .collect()
 }
 
-pub fn from_changeset(db: &str) -> Result<Persisted<Wallet>, bool> {
-    let path = String::from(DB_PATH) + db;
-    let mut db = Connection::open(PathBuf::from(path)).unwrap();
+pub fn from_changeset(db_path: &str, name: &str) -> Result<Persisted<Wallet>, bool> {
+    let mut path = PathBuf::from(db_path);
+    path.push(name);
+    let mut db = Connection::open(&path).unwrap();
     let wallet = Wallet::load().load_wallet(&mut db);
     match wallet {
         Ok(w) => match w {
@@ -56,9 +55,10 @@ pub fn new_seed() -> Mnemonic {
     words
 }
 
-pub fn from_words(name: &str, words: Mnemonic) -> PersistedWallet {
-    let path = String::from(DB_PATH) + name;
-    let mut db = Connection::open(PathBuf::from(path)).unwrap();
+pub fn from_words(db_path: &str, name: &str, words: Mnemonic) -> PersistedWallet {
+    let mut path = PathBuf::from(db_path);
+    path.push(name);
+    let mut db = Connection::open(&path).unwrap();
     let xkey: ExtendedKey = words.into_extended_key().unwrap();
     let xprv = xkey.into_xprv(Network::Testnet).unwrap();
     let wallet = Wallet::create(
@@ -72,7 +72,7 @@ pub fn from_words(name: &str, words: Mnemonic) -> PersistedWallet {
     wallet
 }
 
-pub fn cp_sync(name: &str, wallet: &mut PersistedWallet) -> Balance {
+pub fn cp_sync(db_path: &str, name: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );
@@ -81,12 +81,12 @@ pub fn cp_sync(name: &str, wallet: &mut PersistedWallet) -> Balance {
 
     // Apply the update to the wallet
     wallet.apply_update(update).unwrap();
-    persist(name, wallet);
+    persist(db_path, name, wallet);
     let balance = wallet.balance();
     balance
 }
 
-pub fn full_scan(name: &str, wallet: &mut PersistedWallet) -> Balance {
+pub fn full_scan(db_path: &str, name: &str, wallet: &mut PersistedWallet) -> Balance {
     let client = BdkElectrumClient::new(
         electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
     );
@@ -101,13 +101,14 @@ pub fn full_scan(name: &str, wallet: &mut PersistedWallet) -> Balance {
     let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
     wallet.apply_update(update).unwrap();
-    persist(name, wallet);
+    persist(db_path, name, wallet);
     let balance = wallet.balance();
     balance
 }
 
-fn persist(name: &str, wallet: &mut PersistedWallet) {
-    let path = String::from(DB_PATH) + name;
-    let mut db = Connection::open(PathBuf::from(path)).unwrap();
+fn persist(db_path: &str, name: &str, wallet: &mut PersistedWallet) {
+    let mut path = PathBuf::from(db_path);
+    path.push(name);
+    let mut db = Connection::open(&path).unwrap();
     wallet.persist(&mut db).expect("persist error");
 }

@@ -2,23 +2,9 @@ use bdk_wallet::{bitcoin::Transaction, AddressInfo, Balance, LocalOutput, Persis
 
 use crate::app::{send::SendState, settings::Settings};
 
-pub struct AppConfig {
-    pub wallets_loc: String,
-    pub electrum_url: String,
-}
-
 pub struct CreatedWallet {
     pub wallet: PersistedWallet,
     pub name: String,
-}
-
-impl From<Settings> for AppConfig {
-    fn from(value: Settings) -> Self {
-        Self {
-            wallets_loc: value.wallet_db,
-            electrum_url: value.electrum_url,
-        }
-    }
 }
 
 pub struct TxParts {
@@ -45,7 +31,7 @@ impl From<SendState> for TxParts {
 pub enum WalletRequest {
     Debug(String),
     Sync,
-    AppConfig(AppConfig),
+    AppConfig(Settings),
     CreateTransaction(TxParts),
     SendTransaction(Transaction),
     Close,

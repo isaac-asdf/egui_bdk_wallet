@@ -66,8 +66,9 @@ impl WalletApp {
     pub fn new_bg(&self, wallet: CreatedWallet) {
         let recv = self.for_bg_req.clone();
         let send = self.for_bg_upd.clone();
+        let settings = self.settings.clone();
         std::thread::spawn(move || {
-            let mut bg = WalletBackground::new(wallet.wallet, wallet.name, recv, send);
+            let mut bg = WalletBackground::new(wallet.wallet, wallet.name, recv, send, settings);
             bg.monitor_wallet();
         });
     }
@@ -84,20 +85,21 @@ impl WalletApp {
             Sender<messages::WalletResponse>,
             Receiver<messages::WalletResponse>,
         ) = flume::unbounded();
+        let settings = settings::Settings::new();
 
         WalletApp {
             page: Page::SplashScreen,
             debug: Vec::new(),
             wallet_info: WalletInfo::from_wallet(),
-            splash: splash::SplashState::new(),
+            splash: splash::SplashState::new(&settings.wallet_db),
             home: home::HomeState::new(),
             send: send::SendState::new(),
             receive: receive::ReceiveState::new(),
-            settings: settings::Settings::new(),
             wallet_req: req.0,
             wallet_updates: resp.1,
             for_bg_req: req.1,
             for_bg_upd: resp.0,
+            settings,
         }
     }
 }
@@ -106,6 +108,7 @@ impl eframe::App for WalletApp {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, _storage: &mut dyn eframe::Storage) {
         // eframe::set_value(storage, eframe::APP_KEY, self);
+        self.settings.save();
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
@@ -142,7 +145,10 @@ impl eframe::App for WalletApp {
                         if ui.button("Change Wallet").clicked() {
                             let _ = self.wallet_req.send(messages::WalletRequest::Close);
                             self.page = Page::SplashScreen;
-                            self.splash = splash::SplashState::new();
+                            self.splash = splash::SplashState::new(&self.settings.wallet_db);
+                        }
+                        if ui.button("Settings").clicked() {
+                            self.page = Page::Settings;
                         }
                     });
                     ui.add_space(16.0);
@@ -152,7 +158,7 @@ impl eframe::App for WalletApp {
             });
         });
 
-        if self.page != Page::SplashScreen {
+        if self.page != Page::SplashScreen && self.page != Page::Settings {
             egui::SidePanel::left("side").show(ctx, |ui| sidepanel(self, ui));
         }
 

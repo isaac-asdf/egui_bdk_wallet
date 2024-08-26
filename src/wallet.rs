@@ -8,8 +8,9 @@ use bdk_wallet::{
 };
 
 use crate::{
+    app::settings::Settings,
     bdk_utils,
-    messages::{self, AppConfig, TxParts, WalletRequest, WalletResponse},
+    messages::{self, TxParts, WalletRequest, WalletResponse},
 };
 
 pub struct WalletBackground {
@@ -17,6 +18,8 @@ pub struct WalletBackground {
     name: String,
     wallet_req: Receiver<messages::WalletRequest>,
     wallet_updates: Sender<messages::WalletResponse>,
+    electrum_url: String,
+    db: String,
 }
 
 impl WalletBackground {
@@ -25,12 +28,15 @@ impl WalletBackground {
         name: String,
         req: Receiver<messages::WalletRequest>,
         resp: Sender<messages::WalletResponse>,
+        settings: Settings,
     ) -> Self {
         WalletBackground {
             wallet,
             name,
             wallet_req: req,
             wallet_updates: resp,
+            electrum_url: settings.electrum_url,
+            db: settings.wallet_db,
         }
     }
 
@@ -74,9 +80,9 @@ impl WalletBackground {
             .add_recipient(script_pubkey, Amount::from_sat(tx.sats_amount));
     }
 
-    fn handle_config(&mut self, _c: AppConfig) {
-        // self.wallet_db = c.wallets_loc;
-        // self.electrum_url = c.electrum_url;
+    fn handle_config(&mut self, c: Settings) {
+        self.db = c.wallet_db;
+        self.electrum_url = c.electrum_url;
     }
 
     fn get_balance(&self) {
@@ -107,10 +113,10 @@ impl WalletBackground {
         let cps: Vec<_> = self.wallet.checkpoints().collect();
         let bal: Balance = if cps.len() > 1 {
             // short synce
-            bdk_utils::cp_sync(&self.name, &mut self.wallet)
+            bdk_utils::cp_sync(&self.db, &self.name, &mut self.wallet)
         } else {
             // full synce
-            bdk_utils::full_scan(&self.name, &mut self.wallet)
+            bdk_utils::full_scan(&self.db, &self.name, &mut self.wallet)
         };
 
         // send balance to UI thread
