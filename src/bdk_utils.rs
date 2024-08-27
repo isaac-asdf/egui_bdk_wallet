@@ -106,7 +106,7 @@ pub fn full_scan(db_path: &str, name: &str, wallet: &mut PersistedWallet) -> Bal
     balance
 }
 
-fn persist(db_path: &str, name: &str, wallet: &mut PersistedWallet) {
+pub fn persist(db_path: &str, name: &str, wallet: &mut PersistedWallet) {
     let mut path = PathBuf::from(db_path);
     path.push(name);
     let mut db = Connection::open(&path).unwrap();

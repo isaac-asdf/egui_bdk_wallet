@@ -4,7 +4,7 @@ use flume::{Receiver, Sender};
 
 use bdk_wallet::{
     bitcoin::{Amount, FeeRate, ScriptBuf, Transaction, WPubkeyHash},
-    Balance, PersistedWallet,
+    AddressInfo, Balance, PersistedWallet,
 };
 
 use crate::{
@@ -12,6 +12,8 @@ use crate::{
     bdk_utils,
     messages::{self, TxParts, WalletRequest, WalletResponse},
 };
+
+mod receive;
 
 pub struct WalletBackground {
     wallet: PersistedWallet,
@@ -40,9 +42,22 @@ impl WalletBackground {
         }
     }
 
+    fn persist(&mut self) {
+        bdk_utils::persist(&self.db, &self.name, &mut self.wallet);
+    }
+
+    fn mark_used(&mut self, addr: AddressInfo) {
+        self.wallet
+            .mark_used(bdk_wallet::KeychainKind::External, addr.index);
+        self.persist();
+    }
+
     pub fn monitor_wallet(&mut self) {
         self.get_balance();
-        self.get_unused_addrs();
+        let addr = receive::get_unused_addrs(self);
+        self.wallet_updates
+            .send(WalletResponse::RecvAddresses(addr))
+            .unwrap();
         self.wallet_updates
             .send(messages::WalletResponse::WalletReady)
             .unwrap();
@@ -56,6 +71,7 @@ impl WalletBackground {
                     WalletRequest::AppConfig(c) => self.handle_config(c),
                     WalletRequest::SendTransaction(tx) => self.send_tx(tx),
                     WalletRequest::CreateTransaction(tx) => self.create_tx(tx),
+                    WalletRequest::MarkUsed(addr) => self.mark_used(addr),
                     WalletRequest::Close => break,
                 };
             };
@@ -90,17 +106,6 @@ impl WalletBackground {
         self.wallet_updates
             .send(WalletResponse::Sync(balance))
             .unwrap();
-    }
-
-    fn get_unused_addrs(&mut self) {
-        // let revealed = self
-        //     .wallet
-        //     .list_unused_addresses(bdk_wallet::KeychainKind::External)
-        //     .collect();
-        // let addrs = vec![wallet.reveal_next_address(bdk_wallet::KeychainKind::External)];
-        // self.wallet_updates
-        // .send(WalletResponse::RecvAddresses(revealed))
-        // .unwrap();
     }
 
     fn handle_sync(&mut self) {

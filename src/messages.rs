@@ -34,6 +34,7 @@ pub enum WalletRequest {
     AppConfig(Settings),
     CreateTransaction(TxParts),
     SendTransaction(Transaction),
+    MarkUsed(AddressInfo),
     Close,
 }
 
