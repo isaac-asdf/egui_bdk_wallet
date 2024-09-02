@@ -1,3 +1,4 @@
+use bdk_wallet::bitcoin::Network;
 use flume::{Receiver, Sender};
 use sidepanel::sidepanel;
 
@@ -13,6 +14,7 @@ mod splash;
 mod transactions;
 
 pub struct WalletApp {
+    pub network: Network,
     /// Currently viewed page
     pub page: Page,
     /// for debug purposes
@@ -88,6 +90,7 @@ impl WalletApp {
         let settings = settings::Settings::new();
 
         WalletApp {
+            network: Network::Testnet,
             page: Page::SplashScreen,
             debug: Vec::new(),
             wallet_info: WalletInfo::from_wallet(),
@@ -128,6 +131,7 @@ impl eframe::App for WalletApp {
                 messages::WalletResponse::UtxoList(utxos) => self.send.selected_utxos = utxos,
                 messages::WalletResponse::RecvAddresses(addrs) => self.receive.next_addr = addrs,
                 messages::WalletResponse::WalletReady => self.page = Page::Home,
+                messages::WalletResponse::NewPsbt(psbt) => self.send.psbt = Some(psbt),
             }
         }
 
