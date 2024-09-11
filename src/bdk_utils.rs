@@ -3,7 +3,8 @@ use bdk_wallet::{
         key::rand::{thread_rng, Rng},
         Network, Transaction, Txid,
     },
-    keys::{bip39::Mnemonic, DerivableKey, ExtendedKey},
+    keys::{bip39::Mnemonic, DerivableKey, DescriptorKey, ExtendedKey, IntoDescriptorKey, KeyMap},
+    miniscript::BareCtx,
     template::Bip84,
     Balance, KeychainKind, PersistedWallet, Wallet,
 };
@@ -11,15 +12,16 @@ use bdk_wallet::{
 use bdk_electrum::electrum_client;
 use bdk_electrum::BdkElectrumClient;
 use bdk_wallet::rusqlite::Connection;
-use std::path::PathBuf;
+use std::{
+    io::{LineWriter, Read, Write},
+    path::PathBuf,
+};
 
 const STOP_GAP: usize = 50;
 const BATCH_SIZE: usize = 5;
 
-pub fn broadcast_tx(tx: &Transaction) -> Result<Txid, String> {
-    let client = BdkElectrumClient::new(
-        electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
-    );
+pub fn broadcast_tx(tx: &Transaction, elec_url: &str) -> Result<Txid, String> {
+    let client = BdkElectrumClient::new(electrum_client::Client::new(elec_url).unwrap());
 
     client.transaction_broadcast(tx).map_err(|e| e.to_string())
 }
@@ -34,6 +36,7 @@ pub fn list_wallets(db_path: &str) -> Vec<String> {
             };
             None
         })
+        .filter(|f| !f.contains("keys"))
         .collect()
 }
 
@@ -41,10 +44,29 @@ pub fn from_changeset(db_path: &str, name: &str) -> Result<PersistedWallet<Conne
     let mut path = PathBuf::from(db_path);
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
-    let wallet = Wallet::load().load_wallet(&mut db);
+    let wallet = Wallet::load().extract_keys().load_wallet(&mut db);
     match wallet {
         Ok(w) => match w {
-            Some(w) => Ok(w),
+            Some(mut w) => {
+                // add private key if it is available
+                let kpath = String::from(name) + "_keys";
+                path.set_file_name(kpath);
+                println!("Starting key check");
+                if let Ok(mut f) = std::fs::File::open(path) {
+                    //
+                    let mut pkey_bytes = Vec::new();
+                    f.read(&mut pkey_bytes).unwrap();
+                    // let keymap =
+                    //     bdk_wallet::miniscript::Descriptor::parse_descriptor(w.secp_ctx(), "");
+                    // w.set_keymap(KeychainKind::External, keymap);
+                    // let key =
+                    //     bdk_wallet::bitcoin::PrivateKey::from_slice(&pkey_bytes, Network::Testnet)
+                    //         .unwrap();
+                    // let km = w.keychains().for_each(|k| {
+                    // })
+                }
+                return Ok(w);
+            }
             None => Err(false),
         },
         Err(_) => Err(false),
@@ -62,7 +84,12 @@ pub fn new_seed() -> Mnemonic {
     words
 }
 
-pub fn from_words(db_path: &str, name: &str, words: Mnemonic) -> PersistedWallet<Connection> {
+pub fn from_words(
+    db_path: &str,
+    name: &str,
+    words: Mnemonic,
+    save_seed: bool,
+) -> PersistedWallet<Connection> {
     let mut path = PathBuf::from(db_path);
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
@@ -70,19 +97,44 @@ pub fn from_words(db_path: &str, name: &str, words: Mnemonic) -> PersistedWallet
     let xprv = xkey.into_xprv(Network::Testnet).unwrap();
     let wallet = Wallet::create(
         Bip84(xprv.clone(), KeychainKind::External),
-        Bip84(xprv, KeychainKind::Internal),
+        Bip84(xprv.clone(), KeychainKind::Internal),
     )
     .network(Network::Testnet)
     .create_wallet(&mut db)
     .unwrap();
 
+    if save_seed {
+        let keys_name = String::from(name) + "_keys";
+        path.set_file_name(keys_name);
+
+        let f = std::fs::File::create(path).unwrap();
+        let mut lr = LineWriter::new(f);
+
+        let mut bs = Vec::new();
+        for ele in wallet.get_signers(KeychainKind::External).signers() {
+            let test = ele.descriptor_secret_key().unwrap().to_string();
+            bs.push(format!("{test}\n"));
+        }
+        for ele in wallet.get_signers(KeychainKind::Internal).signers() {
+            let test = ele.descriptor_secret_key().unwrap().to_string();
+            bs.push(format!("{test}\n"));
+        }
+
+        bs.iter().for_each(|key| {
+            lr.write(key.as_bytes()).unwrap();
+        });
+    }
+
     wallet
 }
 
-pub fn cp_sync(db_path: &str, name: &str, wallet: &mut PersistedWallet<Connection>) -> Balance {
-    let client = BdkElectrumClient::new(
-        electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
-    );
+pub fn cp_sync(
+    db_path: &str,
+    name: &str,
+    wallet: &mut PersistedWallet<Connection>,
+    elec_url: &str,
+) -> Balance {
+    let client = BdkElectrumClient::new(electrum_client::Client::new(elec_url).unwrap());
     let sync_request = wallet.start_sync_with_revealed_spks().build();
     let update = client.sync(sync_request, BATCH_SIZE, true).unwrap();
 
@@ -93,10 +145,13 @@ pub fn cp_sync(db_path: &str, name: &str, wallet: &mut PersistedWallet<Connectio
     balance
 }
 
-pub fn full_scan(db_path: &str, name: &str, wallet: &mut PersistedWallet<Connection>) -> Balance {
-    let client = BdkElectrumClient::new(
-        electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
-    );
+pub fn full_scan(
+    db_path: &str,
+    name: &str,
+    wallet: &mut PersistedWallet<Connection>,
+    elec_url: &str,
+) -> Balance {
+    let client = BdkElectrumClient::new(electrum_client::Client::new(elec_url).unwrap());
 
     // Perform the initial full scan on the wallet
     let full_scan_request = wallet.start_full_scan().build();
@@ -115,4 +170,26 @@ pub fn persist(db_path: &str, name: &str, wallet: &mut PersistedWallet<Connectio
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
     wallet.persist(&mut db).expect("persist error");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_wallet() {
+        let words = "section attitude true fabric foam ribbon chaos cradle ordinary venture fat ensure winter skate error glove pulse dolphin they cable verify wolf rain ribbon";
+        let mne = Mnemonic::parse(words).unwrap();
+
+        let mut p = PathBuf::from("./tests");
+        p.push("tw");
+        let _ = std::fs::remove_file(p);
+        from_words("./tests/", "tw", mne, true);
+        assert!(true);
+    }
+
+    #[test]
+    fn from_tprv() {
+        let tp = r"tprv8ZgxMBicQKsPf7hCAN5uXT8AASNqV9gGdXdok9rjSzevhfU6mAwhP2UvUddMdeVrvS8cCUjTAWt2LDJFJ8WLgVXkwnqzEzs3eRdtjhm4D5U/84'/1'/0'/0/*";
+    }
 }

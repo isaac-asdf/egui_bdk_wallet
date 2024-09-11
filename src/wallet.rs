@@ -96,7 +96,7 @@ impl WalletBackground {
             e.to_string()
         } else {
             let tx = psbt.extract_tx().unwrap();
-            let res = bdk_utils::broadcast_tx(&tx);
+            let res = bdk_utils::broadcast_tx(&tx, &self.electrum_url);
             match res {
                 Ok(txid) => format!("txid: {txid:?}"),
                 Err(e) => e,
@@ -164,10 +164,10 @@ impl WalletBackground {
         let cps: Vec<_> = self.wallet.checkpoints().collect();
         let bal: Balance = if cps.len() > 1 {
             // short synce
-            bdk_utils::cp_sync(&self.db, &self.name, &mut self.wallet)
+            bdk_utils::cp_sync(&self.db, &self.name, &mut self.wallet, &self.electrum_url)
         } else {
             // full synce
-            bdk_utils::full_scan(&self.db, &self.name, &mut self.wallet)
+            bdk_utils::full_scan(&self.db, &self.name, &mut self.wallet, &self.electrum_url)
         };
 
         // send balance to UI thread
