@@ -19,12 +19,20 @@ impl ReceiveState {
     }
 }
 
-pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
+pub fn page(state: &mut WalletApp, ui: &mut egui::Ui) {
     ui.heading("Receive");
-    ui.horizontal(|ui| {
-        ui.label("Next receive address: ");
-        if app_state.receive.next_addr.len() > 0 {
-            ui.label(format!("{}", app_state.receive.next_addr[0]));
-        }
-    });
+    for i in 0..state.receive.next_addr.len() {
+        ui.horizontal(|ui| {
+            ui.label(format!("Unused Address {:02}:", i + 1));
+            ui.label(format!("{}", state.receive.next_addr[i]));
+            if ui.button("Mark used").clicked() {
+                state.debug.push("mark used unimplemented".into());
+                // state
+                //     .wallet_req
+                //     .send(crate::messages::WalletRequest::MarkUsed(
+                //         state.receive.next_addr[i],
+                //     ));
+            }
+        });
+    }
 }

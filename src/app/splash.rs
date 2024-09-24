@@ -8,6 +8,7 @@ use crate::WalletApp;
 pub struct SplashState {
     selected_wallet: String,
     wallets: Vec<String>,
+    save_seed: bool,
     new_name: String,
     new_1: String,
     new_2: String,
@@ -25,6 +26,7 @@ impl SplashState {
     pub fn new(db: &str) -> Self {
         SplashState {
             selected_wallet: String::new(),
+            save_seed: false,
             wallets: bdk_utils::list_wallets(db),
             new_name: String::new(),
             new_1: String::new(),
@@ -88,6 +90,8 @@ pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
                 );
             });
 
+        ui.checkbox(&mut app_state.splash.save_seed, "Save private key?");
+
         match app_state.splash.new_option {
             NewWallet::Seed => seed_opt(app_state, ui),
             NewWallet::Xpub => xpub_opt(app_state, ui),
@@ -124,7 +128,12 @@ fn seed_opt(app_state: &mut WalletApp, ui: &mut egui::Ui) {
 }
 
 fn finalize_wallet(state: &mut WalletApp, mne: Mnemonic) {
-    let wallet = bdk_utils::from_words(&state.settings.wallet_db, &state.splash.new_name, mne);
+    let wallet = bdk_utils::from_words(
+        &state.settings.wallet_db,
+        &state.splash.new_name,
+        mne,
+        state.splash.save_seed,
+    );
     let wallet = CreatedWallet {
         wallet,
         name: state.splash.new_name.clone(),

@@ -1,10 +1,11 @@
-use std::{str::FromStr, thread, time::Duration};
+use std::{thread, time::Duration};
 
+use bdk_sqlite::rusqlite::Connection;
 use flume::{Receiver, Sender};
 
 use bdk_wallet::{
-    bitcoin::{Amount, FeeRate, ScriptBuf, Transaction, WPubkeyHash},
-    Balance, PersistedWallet,
+    bitcoin::{Amount, FeeRate, Psbt},
+    AddressInfo, Balance, LocalOutput, PersistedWallet, SignOptions,
 };
 
 use crate::{
@@ -13,8 +14,10 @@ use crate::{
     messages::{self, TxParts, WalletRequest, WalletResponse},
 };
 
+mod receive;
+
 pub struct WalletBackground {
-    wallet: PersistedWallet,
+    wallet: PersistedWallet<Connection>,
     name: String,
     wallet_req: Receiver<messages::WalletRequest>,
     wallet_updates: Sender<messages::WalletResponse>,
@@ -24,7 +27,7 @@ pub struct WalletBackground {
 
 impl WalletBackground {
     pub fn new(
-        wallet: PersistedWallet,
+        wallet: PersistedWallet<Connection>,
         name: String,
         req: Receiver<messages::WalletRequest>,
         resp: Sender<messages::WalletResponse>,
@@ -40,9 +43,31 @@ impl WalletBackground {
         }
     }
 
+    fn persist(&mut self) {
+        bdk_utils::persist(&self.db, &self.name, &mut self.wallet);
+    }
+
+    fn mark_used(&mut self, addr: AddressInfo) {
+        self.wallet
+            .mark_used(bdk_wallet::KeychainKind::External, addr.index);
+        self.persist();
+    }
+
+    fn get_utxos(&self) -> Vec<LocalOutput> {
+        self.wallet.list_unspent().collect()
+    }
+
     pub fn monitor_wallet(&mut self) {
         self.get_balance();
-        self.get_unused_addrs();
+        let addr = receive::get_unused_addrs(self);
+        self.wallet_updates
+            .send(WalletResponse::RecvAddresses(addr))
+            .unwrap();
+        self.wallet_updates
+            .send(WalletResponse::UtxoList(self.get_utxos()))
+            .unwrap();
+
+        // tell ui to go to loaded wallet display
         self.wallet_updates
             .send(messages::WalletResponse::WalletReady)
             .unwrap();
@@ -56,6 +81,7 @@ impl WalletBackground {
                     WalletRequest::AppConfig(c) => self.handle_config(c),
                     WalletRequest::SendTransaction(tx) => self.send_tx(tx),
                     WalletRequest::CreateTransaction(tx) => self.create_tx(tx),
+                    WalletRequest::MarkUsed(addr) => self.mark_used(addr),
                     WalletRequest::Close => break,
                 };
             };
@@ -63,21 +89,57 @@ impl WalletBackground {
         println!("Closing wallet");
     }
 
-    fn send_tx(&mut self, _tx: Transaction) {
-        //
+    fn send_tx(&mut self, mut psbt: Psbt) {
+        // fn send_tx(&mut self, tx: Transaction) {
+        let sigops = SignOptions::default();
+        let msg = if let Err(e) = self.wallet.finalize_psbt(&mut psbt, sigops) {
+            e.to_string()
+        } else {
+            let tx = psbt.extract_tx().unwrap();
+            let res = bdk_utils::broadcast_tx(&tx, &self.electrum_url);
+            match res {
+                Ok(txid) => format!("txid: {txid:?}"),
+                Err(e) => e,
+            }
+        };
+        self.wallet_updates
+            .send(WalletResponse::Debug(msg))
+            .unwrap();
     }
     fn create_tx(&mut self, tx: TxParts) {
         self.wallet_updates
             .send(WalletResponse::Debug("Starting tx creation".into()))
             .unwrap();
 
-        let wpkh: WPubkeyHash = WPubkeyHash::from_str(&tx.addr).unwrap();
-        let script_pubkey = ScriptBuf::new_p2wpkh(&wpkh);
-        let _tx = self
-            .wallet
-            .build_tx()
+        // let wpkh: WPubkeyHash = WPubkeyHash::from_str(&tx.addr).unwrap();
+        // let script_pubkey = ScriptBuf::new_p2wpkh(&wpkh);
+        let mut builder = self.wallet.build_tx();
+        builder
             .fee_rate(FeeRate::from_sat_per_vb(5_u64).unwrap())
-            .add_recipient(script_pubkey, Amount::from_sat(tx.sats_amount));
+            .add_recipient(tx.addr.script_pubkey(), Amount::from_sat(tx.sats_amount));
+
+        if let Some(selected) = tx.utxos {
+            selected.iter().for_each(|utxo| {
+                builder.add_utxo(utxo.outpoint).unwrap();
+            })
+        }
+
+        let built = builder.finish();
+
+        // self.persist();
+
+        if let Ok(res) = built {
+            self.wallet_updates
+                .send(WalletResponse::NewPsbt(res))
+                .unwrap();
+            self.wallet_updates
+                .send(WalletResponse::Debug("TX Created".into()))
+                .unwrap();
+        } else {
+            self.wallet_updates
+                .send(WalletResponse::Debug("tx creation failed".into()))
+                .unwrap();
+        }
     }
 
     fn handle_config(&mut self, c: Settings) {
@@ -92,17 +154,6 @@ impl WalletBackground {
             .unwrap();
     }
 
-    fn get_unused_addrs(&mut self) {
-        // let revealed = self
-        //     .wallet
-        //     .list_unused_addresses(bdk_wallet::KeychainKind::External)
-        //     .collect();
-        // let addrs = vec![wallet.reveal_next_address(bdk_wallet::KeychainKind::External)];
-        // self.wallet_updates
-        // .send(WalletResponse::RecvAddresses(revealed))
-        // .unwrap();
-    }
-
     fn handle_sync(&mut self) {
         // log starting
         self.wallet_updates
@@ -113,10 +164,10 @@ impl WalletBackground {
         let cps: Vec<_> = self.wallet.checkpoints().collect();
         let bal: Balance = if cps.len() > 1 {
             // short synce
-            bdk_utils::cp_sync(&self.db, &self.name, &mut self.wallet)
+            bdk_utils::cp_sync(&self.db, &self.name, &mut self.wallet, &self.electrum_url)
         } else {
             // full synce
-            bdk_utils::full_scan(&self.db, &self.name, &mut self.wallet)
+            bdk_utils::full_scan(&self.db, &self.name, &mut self.wallet, &self.electrum_url)
         };
 
         // send balance to UI thread

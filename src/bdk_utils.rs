@@ -1,9 +1,8 @@
 use bdk_wallet::{
     bitcoin::{
         key::rand::{thread_rng, Rng},
-        Network,
+        Network, Transaction, Txid,
     },
-    chain::Persisted,
     keys::{bip39::Mnemonic, DerivableKey, ExtendedKey},
     template::Bip84,
     Balance, KeychainKind, PersistedWallet, Wallet,
@@ -12,10 +11,19 @@ use bdk_wallet::{
 use bdk_electrum::electrum_client;
 use bdk_electrum::BdkElectrumClient;
 use bdk_wallet::rusqlite::Connection;
-use std::path::PathBuf;
+use std::{
+    io::{LineWriter, Read, Write},
+    path::PathBuf,
+};
 
 const STOP_GAP: usize = 50;
 const BATCH_SIZE: usize = 5;
+
+pub fn broadcast_tx(tx: &Transaction, elec_url: &str) -> Result<Txid, String> {
+    let client = BdkElectrumClient::new(electrum_client::Client::new(elec_url).unwrap());
+
+    client.transaction_broadcast(tx).map_err(|e| e.to_string())
+}
 
 pub fn list_wallets(db_path: &str) -> Vec<String> {
     let files = std::fs::read_dir(db_path).unwrap();
@@ -27,20 +35,41 @@ pub fn list_wallets(db_path: &str) -> Vec<String> {
             };
             None
         })
+        .filter(|f| !f.contains("keys"))
         .collect()
 }
 
-pub fn from_changeset(db_path: &str, name: &str) -> Result<Persisted<Wallet>, bool> {
+pub fn from_changeset(db_path: &str, name: &str) -> Result<PersistedWallet<Connection>, bool> {
     let mut path = PathBuf::from(db_path);
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
-    let wallet = Wallet::load().load_wallet(&mut db);
+    let kpath = String::from(name) + "_keys";
+    path.set_file_name(kpath);
+    let wallet = if let Ok(mut f) = std::fs::File::open(path) {
+        let wallet = Wallet::load().extract_keys();
+        let mut tprv = String::new();
+        f.read_to_string(&mut tprv);
+        let mut keys = tprv.lines();
+        let extkey: String = keys.next().unwrap().to_owned();
+        let intkey: String = keys.next().unwrap().to_owned();
+        wallet
+            .descriptor(KeychainKind::Internal, Some(intkey))
+            .descriptor(KeychainKind::External, Some(extkey))
+    } else {
+        Wallet::load()
+    };
+    let wallet = wallet.load_wallet(&mut db);
     match wallet {
         Ok(w) => match w {
-            Some(w) => Ok(w),
+            Some(mut w) => {
+                return Ok(w);
+            }
             None => Err(false),
         },
-        Err(_) => Err(false),
+        Err(e) => {
+            println!("{:?}", e);
+            Err(false)
+        }
     }
 }
 
@@ -55,7 +84,12 @@ pub fn new_seed() -> Mnemonic {
     words
 }
 
-pub fn from_words(db_path: &str, name: &str, words: Mnemonic) -> PersistedWallet {
+pub fn from_words(
+    db_path: &str,
+    name: &str,
+    words: Mnemonic,
+    save_seed: bool,
+) -> PersistedWallet<Connection> {
     let mut path = PathBuf::from(db_path);
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
@@ -63,20 +97,45 @@ pub fn from_words(db_path: &str, name: &str, words: Mnemonic) -> PersistedWallet
     let xprv = xkey.into_xprv(Network::Testnet).unwrap();
     let wallet = Wallet::create(
         Bip84(xprv.clone(), KeychainKind::External),
-        Bip84(xprv, KeychainKind::Internal),
+        Bip84(xprv.clone(), KeychainKind::Internal),
     )
     .network(Network::Testnet)
     .create_wallet(&mut db)
     .unwrap();
 
+    if save_seed {
+        let keys_name = String::from(name) + "_keys";
+        path.set_file_name(keys_name);
+
+        let f = std::fs::File::create(path).unwrap();
+        let mut lr = LineWriter::new(f);
+
+        let mut bs = Vec::new();
+        for ele in wallet.get_signers(KeychainKind::External).signers() {
+            let test = ele.descriptor_secret_key().unwrap().to_string();
+            bs.push(format!("{test}\n"));
+        }
+        for ele in wallet.get_signers(KeychainKind::Internal).signers() {
+            let test = ele.descriptor_secret_key().unwrap().to_string();
+            bs.push(format!("{test}\n"));
+        }
+
+        bs.iter().for_each(|key| {
+            lr.write(key.as_bytes()).unwrap();
+        });
+    }
+
     wallet
 }
 
-pub fn cp_sync(db_path: &str, name: &str, wallet: &mut PersistedWallet) -> Balance {
-    let client = BdkElectrumClient::new(
-        electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
-    );
-    let sync_request = wallet.start_sync_with_revealed_spks();
+pub fn cp_sync(
+    db_path: &str,
+    name: &str,
+    wallet: &mut PersistedWallet<Connection>,
+    elec_url: &str,
+) -> Balance {
+    let client = BdkElectrumClient::new(electrum_client::Client::new(elec_url).unwrap());
+    let sync_request = wallet.start_sync_with_revealed_spks().build();
     let update = client.sync(sync_request, BATCH_SIZE, true).unwrap();
 
     // Apply the update to the wallet
@@ -86,19 +145,19 @@ pub fn cp_sync(db_path: &str, name: &str, wallet: &mut PersistedWallet) -> Balan
     balance
 }
 
-pub fn full_scan(db_path: &str, name: &str, wallet: &mut PersistedWallet) -> Balance {
-    let client = BdkElectrumClient::new(
-        electrum_client::Client::new("ssl://electrum.blockstream.info:60002").unwrap(),
-    );
+pub fn full_scan(
+    db_path: &str,
+    name: &str,
+    wallet: &mut PersistedWallet<Connection>,
+    elec_url: &str,
+) -> Balance {
+    let client = BdkElectrumClient::new(electrum_client::Client::new(elec_url).unwrap());
 
     // Perform the initial full scan on the wallet
-    let full_scan_request = wallet.start_full_scan();
-    let mut update = client
+    let full_scan_request = wallet.start_full_scan().build();
+    let update = client
         .full_scan(full_scan_request, STOP_GAP, BATCH_SIZE, true)
         .unwrap();
-
-    let now = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs();
-    let _ = update.graph_update.update_last_seen_unconfirmed(now);
 
     wallet.apply_update(update).unwrap();
     persist(db_path, name, wallet);
@@ -106,9 +165,34 @@ pub fn full_scan(db_path: &str, name: &str, wallet: &mut PersistedWallet) -> Bal
     balance
 }
 
-fn persist(db_path: &str, name: &str, wallet: &mut PersistedWallet) {
+pub fn persist(db_path: &str, name: &str, wallet: &mut PersistedWallet<Connection>) {
     let mut path = PathBuf::from(db_path);
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
     wallet.persist(&mut db).expect("persist error");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_wallet() {
+        let words = "section attitude true fabric foam ribbon chaos cradle ordinary venture fat ensure winter skate error glove pulse dolphin they cable verify wolf rain ribbon";
+        let mne = Mnemonic::parse(words).unwrap();
+
+        let mut p = PathBuf::from("./tests");
+        p.push("tw");
+        let _ = std::fs::remove_file(p);
+        from_words("./tests/", "tw", mne, true);
+        assert!(true);
+    }
+
+    #[test]
+    fn from_tprv() {
+        let w = from_changeset("./tests/", "tw").unwrap();
+        w.keychains().for_each(|kc| {
+            println!("keychain:{:?}", kc);
+        });
+    }
 }

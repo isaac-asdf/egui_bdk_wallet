@@ -1,15 +1,19 @@
-use bdk_wallet::{bitcoin::Transaction, AddressInfo, Balance, LocalOutput, PersistedWallet};
+use bdk_sqlite::rusqlite::Connection;
+use bdk_wallet::{
+    bitcoin::{Address, Psbt},
+    AddressInfo, Balance, LocalOutput, PersistedWallet,
+};
 
 use crate::app::{send::SendState, settings::Settings};
 
 pub struct CreatedWallet {
-    pub wallet: PersistedWallet,
+    pub wallet: PersistedWallet<Connection>,
     pub name: String,
 }
 
 pub struct TxParts {
     pub sats_amount: u64,
-    pub addr: String,
+    pub addr: Address,
     pub utxos: Option<Vec<LocalOutput>>,
 }
 
@@ -22,7 +26,7 @@ impl From<SendState> for TxParts {
         };
         TxParts {
             sats_amount: value.sats_amount,
-            addr: value.pay_to_addr,
+            addr: value.pay_to_addr.unwrap(),
             utxos,
         }
     }
@@ -33,17 +37,16 @@ pub enum WalletRequest {
     Sync,
     AppConfig(Settings),
     CreateTransaction(TxParts),
-    SendTransaction(Transaction),
+    SendTransaction(Psbt),
+    MarkUsed(AddressInfo),
     Close,
 }
 
-// pub struct WalletResponse {
-//     pub status: i32,
-// }
 pub enum WalletResponse {
     WalletReady,
     Debug(String),
     Sync(Balance),
     RecvAddresses(Vec<AddressInfo>),
     UtxoList(Vec<LocalOutput>),
+    NewPsbt(Psbt),
 }

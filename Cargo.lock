@@ -101,6 +101,12 @@ checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
 name = "ahash"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0453232ace82dee0dd0b4c87a59bd90f7b53b314f3e0f61fe2ee7c8a16482289"
+
+[[package]]
+name = "ahash"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77c3a9648d43b9cd48db467b3f87fdd6e146bcc88ab0180006cef2179fe11d01"
@@ -477,18 +483,41 @@ checksum = "50d03673ebb8fe45a2d65dbb24f1fa810dcbf7d350ef7dae084ebad312e2cae7"
 dependencies = [
  "bitcoin",
  "miniscript",
+ "serde",
+]
+
+[[package]]
+name = "bdk_chain"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4658f922245892aafb2e9cdfd6674b10b8057b81f0cc2cc5920d4c3a434f4311"
+dependencies = [
+ "bdk_core",
+ "bitcoin",
+ "miniscript",
  "rusqlite",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "bdk_electrum"
-version = "0.16.0"
+name = "bdk_core"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0969a697cc91bc4f852dca83b3fa5e0513b3bbd17e4b781135c5155b8685841"
+checksum = "78dd27e151907dadd43f2d17d14ff613331ffd6c3eb8838d0b38976c8588b2fa"
 dependencies = [
- "bdk_chain 0.17.0",
+ "bitcoin",
+ "hashbrown 0.9.1",
+ "serde",
+]
+
+[[package]]
+name = "bdk_electrum"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "111d37830e50f5722a372b1f621a81d6b5d4d70c226ea4e342aea0cc7b35c635"
+dependencies = [
+ "bdk_core",
  "electrum-client",
 ]
 
@@ -517,11 +546,11 @@ dependencies = [
 
 [[package]]
 name = "bdk_wallet"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49d37a46443951e1a587c433420657a7448bce4a601116869c90d29111281b3e"
+checksum = "9b38aa12ef660265f50802437496cb18bda14774683ab736ba7a7e584885a91c"
 dependencies = [
- "bdk_chain 0.17.0",
+ "bdk_chain 0.18.0",
  "bip39",
  "bitcoin",
  "miniscript",
@@ -1155,7 +1184,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8e20541e5d3da08cf817eb5c8a2bc4024f21aad7acf98de201442d6d76e0ecc"
 dependencies = [
  "accesskit",
- "ahash",
+ "ahash 0.8.7",
  "epaint",
  "log",
  "nohash-hasher",
@@ -1204,9 +1233,9 @@ checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
 name = "electrum-client"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c7b1f8783238bb18e6e137875b0a66f3dffe6c7ea84066e05d033cf180b150f"
+checksum = "7a0bd443023f9f5c4b7153053721939accc7113cbdf810a024434eed454b3db1"
 dependencies = [
  "bitcoin",
  "byteorder",
@@ -1281,7 +1310,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "392eccd6d6b13fadccc268f4f61d9363775ec5711ffdece2a79006d676920bcf"
 dependencies = [
  "ab_glyph",
- "ahash",
+ "ahash 0.8.7",
  "bytemuck",
  "ecolor",
  "emath",
@@ -1662,11 +1691,21 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7afe4a420e3fe79967a00898cc1f4db7c8a49a9333a29f8a4bd76a253d5cd04"
+dependencies = [
+ "ahash 0.4.8",
+ "serde",
+]
+
+[[package]]
+name = "hashbrown"
 version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
- "ahash",
+ "ahash 0.8.7",
 ]
 
 [[package]]
@@ -1675,7 +1714,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.14.3",
 ]
 
 [[package]]
@@ -1762,7 +1801,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d530e1a18b1cb4c484e6e34556a0d948706958449fca0cab753d649f2bce3d1f"
 dependencies = [
  "equivalent",
- "hashbrown",
+ "hashbrown 0.14.3",
 ]
 
 [[package]]
@@ -3640,7 +3679,7 @@ version = "0.29.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2376dab13e09c01ad8b679f0dbc7038af4ec43d9a91344338e37bd686481550"
 dependencies = [
- "ahash",
+ "ahash 0.8.7",
  "android-activity",
  "atomic-waker",
  "bitflags 2.4.1",
