@@ -3,8 +3,7 @@ use bdk_wallet::{
         key::rand::{thread_rng, Rng},
         Network, Transaction, Txid,
     },
-    keys::{bip39::Mnemonic, DerivableKey, DescriptorKey, ExtendedKey, IntoDescriptorKey, KeyMap},
-    miniscript::BareCtx,
+    keys::{bip39::Mnemonic, DerivableKey, ExtendedKey},
     template::Bip84,
     Balance, KeychainKind, PersistedWallet, Wallet,
 };
@@ -44,32 +43,33 @@ pub fn from_changeset(db_path: &str, name: &str) -> Result<PersistedWallet<Conne
     let mut path = PathBuf::from(db_path);
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
-    let wallet = Wallet::load().extract_keys().load_wallet(&mut db);
+    let kpath = String::from(name) + "_keys";
+    path.set_file_name(kpath);
+    let wallet = if let Ok(mut f) = std::fs::File::open(path) {
+        let wallet = Wallet::load().extract_keys();
+        let mut tprv = String::new();
+        f.read_to_string(&mut tprv);
+        let mut keys = tprv.lines();
+        let extkey: String = keys.next().unwrap().to_owned();
+        let intkey: String = keys.next().unwrap().to_owned();
+        wallet
+            .descriptor(KeychainKind::Internal, Some(intkey))
+            .descriptor(KeychainKind::External, Some(extkey))
+    } else {
+        Wallet::load()
+    };
+    let wallet = wallet.load_wallet(&mut db);
     match wallet {
         Ok(w) => match w {
             Some(mut w) => {
-                // add private key if it is available
-                let kpath = String::from(name) + "_keys";
-                path.set_file_name(kpath);
-                println!("Starting key check");
-                if let Ok(mut f) = std::fs::File::open(path) {
-                    //
-                    let mut pkey_bytes = Vec::new();
-                    f.read(&mut pkey_bytes).unwrap();
-                    // let keymap =
-                    //     bdk_wallet::miniscript::Descriptor::parse_descriptor(w.secp_ctx(), "");
-                    // w.set_keymap(KeychainKind::External, keymap);
-                    // let key =
-                    //     bdk_wallet::bitcoin::PrivateKey::from_slice(&pkey_bytes, Network::Testnet)
-                    //         .unwrap();
-                    // let km = w.keychains().for_each(|k| {
-                    // })
-                }
                 return Ok(w);
             }
             None => Err(false),
         },
-        Err(_) => Err(false),
+        Err(e) => {
+            println!("{:?}", e);
+            Err(false)
+        }
     }
 }
 
@@ -190,6 +190,9 @@ mod tests {
 
     #[test]
     fn from_tprv() {
-        let tp = r"tprv8ZgxMBicQKsPf7hCAN5uXT8AASNqV9gGdXdok9rjSzevhfU6mAwhP2UvUddMdeVrvS8cCUjTAWt2LDJFJ8WLgVXkwnqzEzs3eRdtjhm4D5U/84'/1'/0'/0/*";
+        let w = from_changeset("./tests/", "tw").unwrap();
+        w.keychains().for_each(|kc| {
+            println!("keychain:{:?}", kc);
+        });
     }
 }
