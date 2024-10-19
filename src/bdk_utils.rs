@@ -19,6 +19,8 @@ use std::{
 const STOP_GAP: usize = 50;
 const BATCH_SIZE: usize = 5;
 
+const NETWORK: Network = Network::Testnet;
+
 pub fn broadcast_tx(tx: &Transaction, elec_url: &str) -> Result<Txid, String> {
     let client = BdkElectrumClient::new(electrum_client::Client::new(elec_url).unwrap());
 
@@ -48,7 +50,7 @@ pub fn from_changeset(db_path: &str, name: &str) -> Result<PersistedWallet<Conne
     let wallet = if let Ok(mut f) = std::fs::File::open(path) {
         let wallet = Wallet::load().extract_keys();
         let mut tprv = String::new();
-        f.read_to_string(&mut tprv);
+        f.read_to_string(&mut tprv).unwrap();
         let mut keys = tprv.lines();
         let extkey: String = keys.next().unwrap().to_owned();
         let intkey: String = keys.next().unwrap().to_owned();
@@ -61,9 +63,7 @@ pub fn from_changeset(db_path: &str, name: &str) -> Result<PersistedWallet<Conne
     let wallet = wallet.load_wallet(&mut db);
     match wallet {
         Ok(w) => match w {
-            Some(mut w) => {
-                return Ok(w);
-            }
+            Some(w) => Ok(w),
             None => Err(false),
         },
         Err(e) => {
@@ -94,12 +94,12 @@ pub fn from_words(
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
     let xkey: ExtendedKey = words.into_extended_key().unwrap();
-    let xprv = xkey.into_xprv(Network::Testnet).unwrap();
+    let xprv = xkey.into_xprv(NETWORK).unwrap();
     let wallet = Wallet::create(
         Bip84(xprv.clone(), KeychainKind::External),
         Bip84(xprv.clone(), KeychainKind::Internal),
     )
-    .network(Network::Testnet)
+    .network(NETWORK)
     .create_wallet(&mut db)
     .unwrap();
 
@@ -113,11 +113,11 @@ pub fn from_words(
         let mut bs = Vec::new();
         for ele in wallet.get_signers(KeychainKind::External).signers() {
             let test = ele.descriptor_secret_key().unwrap().to_string();
-            bs.push(format!("{test}\n"));
+            bs.push(format!("wpkh({test})\n"));
         }
         for ele in wallet.get_signers(KeychainKind::Internal).signers() {
             let test = ele.descriptor_secret_key().unwrap().to_string();
-            bs.push(format!("{test}\n"));
+            bs.push(format!("wpkh({test})\n"));
         }
 
         bs.iter().for_each(|key| {
