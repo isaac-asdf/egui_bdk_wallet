@@ -1,7 +1,7 @@
 use bdk_wallet::{
     bitcoin::{
         key::rand::{thread_rng, Rng},
-        Network, Transaction, Txid,
+        BlockHash, Network, Transaction, Txid,
     },
     keys::{bip39::Mnemonic, DerivableKey, ExtendedKey},
     template::Bip84,
@@ -14,12 +14,16 @@ use bdk_wallet::rusqlite::Connection;
 use std::{
     io::{LineWriter, Read, Write},
     path::PathBuf,
+    str::FromStr,
 };
 
 const STOP_GAP: usize = 50;
 const BATCH_SIZE: usize = 5;
 
 const NETWORK: Network = Network::Testnet;
+/// Testnet4 genesis hash
+pub const TESTNET4_GENESIS_HASH: &str =
+    "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043";
 
 pub fn broadcast_tx(tx: &Transaction, elec_url: &str) -> Result<Txid, String> {
     let client = BdkElectrumClient::new(electrum_client::Client::new(elec_url).unwrap());
@@ -90,6 +94,7 @@ pub fn from_words(
     words: Mnemonic,
     save_seed: bool,
 ) -> PersistedWallet<Connection> {
+    let gen_hash: BlockHash = BlockHash::from_str(TESTNET4_GENESIS_HASH).unwrap();
     let mut path = PathBuf::from(db_path);
     path.push(name);
     let mut db = Connection::open(&path).unwrap();
@@ -100,6 +105,7 @@ pub fn from_words(
         Bip84(xprv.clone(), KeychainKind::Internal),
     )
     .network(NETWORK)
+    .genesis_hash(gen_hash)
     .create_wallet(&mut db)
     .unwrap();
 
