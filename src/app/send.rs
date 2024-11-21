@@ -1,10 +1,15 @@
-use std::{io::Write, str::FromStr};
+use std::{
+    io::{Read, Write},
+    str::FromStr,
+};
 
 use crate::WalletApp;
 use bdk_wallet::{
     bitcoin::{Address, Network, Psbt},
+    miniscript::psbt::PsbtExt,
     LocalOutput,
 };
+use serde::Deserialize;
 
 #[derive(Clone, Debug)]
 pub struct SendState {
@@ -126,11 +131,26 @@ pub fn page(app_state: &mut WalletApp, ui: &mut egui::Ui) {
 
         if ui.button("Download PSBT").clicked() {
             let mut dl = dirs::download_dir().unwrap();
-            dl.push("psbt.txt");
+            dl.push("psbt.psbt");
             if let Ok(mut f) = std::fs::File::create(dl) {
                 if let Some(vec) = app_state.send.get_psbt() {
-                    f.write(&vec).unwrap();
+                    f.write(vec.as_slice()).unwrap();
                 }
+            }
+        }
+
+        if ui.button("Upload PSBT").clicked() {
+            let mut dl = dirs::download_dir().unwrap();
+            dl.push("psbt.psbt");
+            if dl.exists() {
+                let path = dl.to_path_buf();
+                let f = std::fs::File::open(path).unwrap();
+                let mut psbt: Vec<u8> = Vec::new();
+                f.bytes()
+                    .filter_map(|b| Some(b))
+                    .for_each(|b| psbt.push(b.unwrap()));
+                let new_psbt = bdk_wallet::bitcoin::psbt::Psbt::deserialize(psbt.as_slice())
+                    .expect("deserialize error");
             }
         }
 

@@ -163,10 +163,12 @@ impl WalletBackground {
         // request new state
         let cps: Vec<_> = self.wallet.checkpoints().collect();
         let bal: Balance = if cps.len() > 1 {
+            println!("CP sync");
             // short synce
             bdk_utils::cp_sync(&self.db, &self.name, &mut self.wallet, &self.electrum_url)
         } else {
             // full synce
+            println!("Full sync");
             bdk_utils::full_scan(&self.db, &self.name, &mut self.wallet, &self.electrum_url)
         };
 
