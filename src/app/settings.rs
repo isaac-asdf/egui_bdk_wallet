@@ -21,7 +21,9 @@ impl Settings {
         dir.push(SETTINGS);
 
         if !dir.exists() {
+            dir.pop();
             dir.push("wallets");
+            std::fs::create_dir(dir.clone()).expect("unable to create wallet directory");
             Self {
                 electrum_url: "ssl://electrum.blockstream.info:60002".into(),
                 wallet_db: dir.to_str().unwrap().to_string(),
