@@ -16,7 +16,8 @@
         devShells.default = mkShell rec {
           buildInputs = [
             # Rust
-            #rust-bin.stable.latest.default
+            rust-bin.stable.latest.default
+            rust-analyzer
             trunk
 
             # misc. libraries

@@ -18,16 +18,26 @@ impl Settings {
         if !dir.exists() {
             std::fs::create_dir(dir.clone()).expect("unable to create config directory");
         }
-        dir.push(SETTINGS);
 
-        if !dir.exists() {
+        let mut waldir = dir.clone();
+        waldir.push("wallets");
+        if !waldir.exists() {
+            std::fs::create_dir(waldir).expect("unable to create config directory");
+        }
+        let mut settingsfile = dir.clone();
+        settingsfile.push(SETTINGS);
+
+        if !settingsfile.exists() {
             dir.push("wallets");
-            Self {
+            let out = Self {
                 electrum_url: "ssl://electrum.blockstream.info:60002".into(),
                 wallet_db: dir.to_str().unwrap().to_string(),
-            }
+            };
+            let strout = serde_json::to_string(&out).unwrap();
+            std::fs::write(settingsfile, strout).unwrap();
+            out
         } else {
-            let str = std::fs::read_to_string(dir).expect("already checked if exists");
+            let str = std::fs::read_to_string(settingsfile).expect("already checked if exists");
             serde_json::from_str(&str).expect("invalid settings file detected")
         }
     }

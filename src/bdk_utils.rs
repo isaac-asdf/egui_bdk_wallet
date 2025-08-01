@@ -26,6 +26,7 @@ pub fn broadcast_tx(tx: &Transaction, elec_url: &str) -> Result<Txid, String> {
 }
 
 pub fn list_wallets(db_path: &str) -> Vec<String> {
+    println!("{db_path:?}");
     let files = std::fs::read_dir(db_path).unwrap();
     files
         .into_iter()
@@ -52,12 +53,14 @@ pub fn from_changeset(db_path: &str, name: &str) -> Result<PersistedWallet<Conne
         let mut keys = tprv.lines();
         let extkey: String = keys.next().unwrap().to_owned();
         let intkey: String = keys.next().unwrap().to_owned();
+        println!("get wall");
         wallet
             .descriptor(KeychainKind::Internal, Some(intkey))
             .descriptor(KeychainKind::External, Some(extkey))
     } else {
         Wallet::load()
     };
+    println!("got it");
     let wallet = wallet.load_wallet(&mut db);
     match wallet {
         Ok(w) => match w {
